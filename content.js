@@ -1,5 +1,5 @@
 // YouTube Filter - Content Script
-// Disables timelapse controls and limits video repeats
+// Disables video seeking (timeline/progress bar) and limits video repeats
 
 (function() {
   'use strict';
@@ -26,39 +26,62 @@
     return urlParams.get('v');
   }
 
-  // Disable timelapse/playback speed controls
-  function disableTimelapse() {
-    const observer = new MutationObserver(() => {
-      // Hide playback speed button
-      const settingsButton = document.querySelector('.ytp-settings-button');
-      if (settingsButton) {
-        settingsButton.addEventListener('click', () => {
-          setTimeout(() => {
-            const playbackRateOption = document.querySelector('.ytp-panel-menu [role="menuitem"]:has(.ytp-menuitem-label:contains("Playback speed"))');
-            if (playbackRateOption) {
-              playbackRateOption.style.display = 'none';
-            }
-            // Alternative selector
-            const panels = document.querySelectorAll('.ytp-panel-menu .ytp-menuitem');
-            panels.forEach(panel => {
-              const label = panel.querySelector('.ytp-menuitem-label');
-              if (label && (label.textContent.includes('Playback speed') || label.textContent.includes('velocidad'))) {
-                panel.style.display = 'none';
-              }
-            });
-          }, 100);
-        });
-      }
+  // Disable video seeking (progress bar/timeline)
+  function disableSeeking() {
+    const video = document.querySelector('video');
+    if (!video) return;
 
-      // Disable keyboard shortcuts for speed adjustment
-      const video = document.querySelector('video');
-      if (video) {
-        video.playbackRate = 1.0;
-        // Prevent speed changes
-        Object.defineProperty(video, 'playbackRate', {
-          get: function() { return 1.0; },
-          set: function(value) { return 1.0; }
-        });
+    let lastValidTime = 0;
+
+    // Prevent seeking via progress bar
+    video.addEventListener('seeking', (e) => {
+      if (video.currentTime !== lastValidTime) {
+        video.currentTime = lastValidTime;
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    }, true);
+
+    video.addEventListener('seeked', (e) => {
+      if (video.currentTime !== lastValidTime) {
+        video.currentTime = lastValidTime;
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    }, true);
+
+    // Update valid time as video plays normally
+    video.addEventListener('timeupdate', () => {
+      if (!video.seeking) {
+        lastValidTime = video.currentTime;
+      }
+    });
+
+    // Disable keyboard shortcuts for seeking (arrow keys, numbers)
+    document.addEventListener('keydown', (e) => {
+      // Arrow keys, J, L, 0-9 keys used for seeking
+      const seekKeys = ['ArrowLeft', 'ArrowRight', 'j', 'l', 'J', 'L', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+      if (seekKeys.includes(e.key)) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    }, true);
+
+    // Hide and disable the progress bar visually
+    const progressBar = document.querySelector('.ytp-progress-bar-container');
+    if (progressBar) {
+      progressBar.style.pointerEvents = 'none';
+      progressBar.style.opacity = '0.5';
+      progressBar.style.cursor = 'not-allowed';
+    }
+
+    // Prevent clicks on the progress bar
+    const observer = new MutationObserver(() => {
+      const progressBar = document.querySelector('.ytp-progress-bar-container');
+      if (progressBar && progressBar.style.pointerEvents !== 'none') {
+        progressBar.style.pointerEvents = 'none';
+        progressBar.style.opacity = '0.5';
+        progressBar.style.cursor = 'not-allowed';
       }
     });
 
@@ -137,9 +160,17 @@
 
   // Initialize on page load
   function init() {
-    disableTimelapse();
     checkVideoRepeat();
     
+    // Wait for video element to load
+    const videoCheckInterval = setInterval(() => {
+      const video = document.querySelector('video');
+      if (video) {
+        disableSeeking();
+        clearInterval(videoCheckInterval);
+      }
+    }, 500);
+
     // Monitor URL changes (YouTube is a SPA)
     let lastUrl = location.href;
     new MutationObserver(() => {
@@ -147,6 +178,14 @@
       if (currentUrl !== lastUrl) {
         lastUrl = currentUrl;
         checkVideoRepeat();
+        
+        // Re-apply seeking disable on new video
+        setTimeout(() => {
+          const video = document.querySelector('video');
+          if (video) {
+            disableSeeking();
+          }
+        }, 1000);
       }
     }).observe(document.body, { childList: true, subtree: true });
   }
