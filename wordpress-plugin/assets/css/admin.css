@@ -1,0 +1,59 @@
+/* YouTube Monitor Admin Styles */
+
+.yt-monitor-stats {
+    display: flex;
+    gap: 20px;
+    margin: 20px 0;
+}
+
+.yt-stat-box {
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 20px;
+    flex: 1;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.yt-stat-box h3 {
+    margin-top: 0;
+    border-bottom: 2px solid #0073aa;
+    padding-bottom: 10px;
+    color: #0073aa;
+}
+
+.yt-stat-box p {
+    margin: 10px 0;
+    font-size: 14px;
+}
+
+.yt-stat-box strong {
+    font-size: 24px;
+    color: #0073aa;
+}
+
+.yt-device-status {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.yt-device-status.online {
+    background: #46b450;
+    color: white;
+}
+
+.yt-device-status.offline {
+    background: #dc3232;
+    color: white;
+}
+
+.yt-monitor-actions {
+    margin-top: 20px;
+}
+
+.yt-monitor-actions button {
+    margin-right: 10px;
+}
