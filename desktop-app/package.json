@@ -6,7 +6,8 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "build": "electron-builder"
+    "build": "electron-builder",
+    "postinstall": "electron-builder install-app-deps"
   },
   "build": {
     "appId": "com.youtubeMonitor.app",
@@ -36,6 +37,16 @@
     "electron-builder": "^25.0.5"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "overrides": {
+    "glob": "^10.3.10",
+    "rimraf": "^5.0.5",
+    "inflight": "npm:@zkochan/inflight@^1.0.0",
+    "npmlog": "^7.0.1",
+    "are-we-there-yet": "^4.0.2",
+    "gauge": "^5.0.1",
+    "@npmcli/move-file": "npm:@npmcli/fs@^3.1.0"
   }
 }
