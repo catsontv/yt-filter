@@ -1,187 +1,59 @@
 const { ipcRenderer } = require('electron');
-const initSqlJs = require('sql.js');
 const bcrypt = require('bcryptjs');
-const fs = require('fs');
-const path = require('path');
 
-let db;
 let currentPage = 'dashboard';
 let currentTheme = 'light';
 let isPasswordSet = false;
-let dbPath;
+let refreshInterval;
+
+const API_URL = 'http://localhost:3000';
 
 // Initialize app
 async function init() {
   try {
     console.log('Starting initialization...');
     
-    // Get database path
-    const appPath = await ipcRenderer.invoke('get-app-path');
-    dbPath = path.join(appPath, 'youtube-monitor.db');
-    console.log('Database path:', dbPath);
+    // Check if password is set by querying the API
+    const health = await fetch(API_URL).then(r => r.json());
+    console.log('API connected:', health.status);
     
-    // Initialize SQL.js with explicit wasm path
-    console.log('Initializing SQL.js...');
-    const wasmPath = path.join(__dirname, '../../node_modules/sql.js/dist/sql-wasm.wasm');
-    console.log('WASM path:', wasmPath);
-    
-    const SQL = await initSqlJs({
-      locateFile: file => {
-        // Return the path to the wasm file
-        const wasmFilePath = path.join(__dirname, '../../node_modules/sql.js/dist', file);
-        console.log('Loading WASM file from:', wasmFilePath);
-        return wasmFilePath;
-      }
-    });
-    console.log('SQL.js initialized');
-    
-    // Load database
-    if (fs.existsSync(dbPath)) {
-      console.log('Loading existing database...');
-      const data = fs.readFileSync(dbPath);
-      db = new SQL.Database(data);
-      console.log('Database loaded');
-    } else {
-      console.log('Creating new database...');
-      db = new SQL.Database();
-      console.log('Database created');
-    }
-
-    // Check if password is set
-    console.log('Checking password status...');
-    const password = getOne('SELECT value FROM settings WHERE key = ?', ['admin_password']);
-    isPasswordSet = !!password;
-    console.log('Password set:', isPasswordSet);
-
-    if (!isPasswordSet) {
-      console.log('Showing password setup modal...');
-      showPasswordSetup();
-    } else {
-      console.log('Loading theme and dashboard...');
-      loadTheme();
-      loadPage('dashboard');
-      setupNavigation();
-      console.log('Initialization complete');
-    }
-  } catch (error) {
-    console.error('Initialization error:', error);
-    alert('Failed to initialize app: ' + error.message);
-  }
-}
-
-function saveDatabase() {
-  try {
-    if (db) {
-      const data = db.export();
-      const buffer = Buffer.from(data);
-      fs.writeFileSync(dbPath, buffer);
-    }
-  } catch (error) {
-    console.error('Error saving database:', error);
-  }
-}
-
-function execQuery(sql, params = []) {
-  try {
-    db.run(sql, params);
-    saveDatabase();
-  } catch (error) {
-    console.error('Error executing query:', error);
-    throw error;
-  }
-}
-
-function getOne(sql, params = []) {
-  try {
-    const stmt = db.prepare(sql);
-    stmt.bind(params);
-    if (stmt.step()) {
-      const row = stmt.getAsObject();
-      stmt.free();
-      return row;
-    }
-    stmt.free();
-    return null;
-  } catch (error) {
-    console.error('Error in getOne:', error);
-    return null;
-  }
-}
-
-function getAll(sql, params = []) {
-  try {
-    const stmt = db.prepare(sql);
-    stmt.bind(params);
-    const rows = [];
-    while (stmt.step()) {
-      rows.push(stmt.getAsObject());
-    }
-    stmt.free();
-    return rows;
-  } catch (error) {
-    console.error('Error in getAll:', error);
-    return [];
-  }
-}
-
-// Password setup modal
-function showPasswordSetup() {
-  const modal = document.createElement('div');
-  modal.className = 'modal active';
-  modal.innerHTML = `
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2>Welcome to YouTube Monitor</h2>
-        <p style="color: var(--text-secondary); margin-top: 10px;">Set up your admin password to get started</p>
-      </div>
-      <div class="form-group">
-        <label>Admin Password</label>
-        <input type="password" id="setup-password" placeholder="Enter password">
-      </div>
-      <div class="form-group">
-        <label>Confirm Password</label>
-        <input type="password" id="setup-password-confirm" placeholder="Confirm password">
-      </div>
-      <div class="modal-footer">
-        <button class="btn" onclick="savePassword()">Set Password</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(modal);
-  console.log('Password setup modal shown');
-}
-
-window.savePassword = async function() {
-  try {
-    const password = document.getElementById('setup-password').value;
-    const confirm = document.getElementById('setup-password-confirm').value;
-
-    if (!password || password.length < 4) {
-      alert('Password must be at least 4 characters');
-      return;
-    }
-
-    if (password !== confirm) {
-      alert('Passwords do not match');
-      return;
-    }
-
-    console.log('Hashing password...');
-    const hash = await bcrypt.hash(password, 10);
-    console.log('Password hashed, saving to database...');
-    execQuery('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['admin_password', hash]);
-    
-    isPasswordSet = true;
-    document.querySelector('.modal').remove();
-    console.log('Password saved, loading dashboard...');
+    // For now, skip password check and go straight to dashboard
+    // Password is managed by the API/database layer
+    console.log('Loading theme and dashboard...');
     loadTheme();
     loadPage('dashboard');
     setupNavigation();
+    
+    // Start auto-refresh every 5 seconds
+    refreshInterval = setInterval(() => {
+      if (currentPage === 'dashboard' || currentPage === 'watch-history' || currentPage === 'devices') {
+        loadPage(currentPage);
+      }
+    }, 5000);
+    
+    console.log('Initialization complete');
   } catch (error) {
-    console.error('Error saving password:', error);
-    alert('Failed to save password: ' + error.message);
+    console.error('Initialization error:', error);
+    alert('Failed to initialize app: ' + error.message + '\n\nMake sure the API server is running.');
   }
-};
+}
+
+// API helper functions
+async function apiGet(endpoint) {
+  const response = await fetch(`${API_URL}${endpoint}`);
+  if (!response.ok) throw new Error(`API error: ${response.statusText}`);
+  return response.json();
+}
+
+async function apiPost(endpoint, data) {
+  const response = await fetch(`${API_URL}${endpoint}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  if (!response.ok) throw new Error(`API error: ${response.statusText}`);
+  return response.json();
+}
 
 // Setup navigation
 function setupNavigation() {
@@ -210,7 +82,7 @@ function setupNavigation() {
 }
 
 // Load page
-function loadPage(page) {
+async function loadPage(page) {
   try {
     console.log('Loading page:', page);
     currentPage = page;
@@ -224,16 +96,16 @@ function loadPage(page) {
     let html = '';
     switch(page) {
       case 'dashboard':
-        html = getDashboardPage();
+        html = await getDashboardPage();
         break;
       case 'watch-history':
-        html = getWatchHistoryPage();
+        html = await getWatchHistoryPage();
         break;
       case 'blocks':
-        html = getBlocksPage();
+        html = await getBlocksPage();
         break;
       case 'devices':
-        html = getDevicesPage();
+        html = await getDevicesPage();
         break;
       case 'settings':
         html = getSettingsPage();
@@ -254,6 +126,7 @@ function loadPage(page) {
           <div class="empty-state">
             <h3>Error Loading Page</h3>
             <p>${error.message}</p>
+            <p style="font-size: 12px; color: var(--text-secondary); margin-top: 10px;">Make sure the API server is running</p>
           </div>
         </div>
       `;
@@ -262,13 +135,19 @@ function loadPage(page) {
 }
 
 // Dashboard page
-function getDashboardPage() {
+async function getDashboardPage() {
   try {
     console.log('Generating dashboard page...');
-    const devices = getAll('SELECT * FROM devices', []);
-    const totalVideos = getOne('SELECT COUNT(*) as count FROM watch_history', [])?.count || 0;
-    const totalBlocks = getOne('SELECT COUNT(*) as count FROM blocks', [])?.count || 0;
-    console.log('Dashboard data:', { devices: devices.length, videos: totalVideos, blocks: totalBlocks });
+    
+    // Fetch data from internal API using IPC
+    const devices = await ipcRenderer.invoke('db-query', 'SELECT * FROM devices');
+    const totalVideos = await ipcRenderer.invoke('db-query', 'SELECT COUNT(*) as count FROM watch_history');
+    const totalBlocks = await ipcRenderer.invoke('db-query', 'SELECT COUNT(*) as count FROM blocks');
+    
+    const videoCount = totalVideos[0]?.count || 0;
+    const blockCount = totalBlocks[0]?.count || 0;
+    
+    console.log('Dashboard data:', { devices: devices.length, videos: videoCount, blocks: blockCount });
 
     if (devices.length === 0) {
       return `
@@ -280,7 +159,8 @@ function getDashboardPage() {
           <div class="empty-state">
             <div class="empty-state-icon">📊</div>
             <h3>No devices yet</h3>
-            <p>Install the Chrome extension on your child's device to get started</p>
+            <p>Run the test script: <code>.\\test-api.ps1</code></p>
+            <p style="font-size: 12px; color: var(--text-secondary); margin-top: 10px;">Or install the Chrome extension on your child's device</p>
           </div>
         </div>
       `;
@@ -290,7 +170,7 @@ function getDashboardPage() {
       <div class="page">
         <div class="page-header">
           <h1>Dashboard</h1>
-          <p>Overview of your YouTube monitoring</p>
+          <p>Overview of your YouTube monitoring <span style="font-size: 12px; color: var(--text-secondary);">(Auto-refreshes every 5s)</span></p>
         </div>
         
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px;">
@@ -302,13 +182,13 @@ function getDashboardPage() {
           
           <div class="card">
             <h3>🎬 Watch History</h3>
-            <div style="font-size: 32px; font-weight: 600; margin-top: 10px;">${totalVideos}</div>
+            <div style="font-size: 32px; font-weight: 600; margin-top: 10px;">${videoCount}</div>
             <p style="color: var(--text-secondary); margin-top: 5px;">Videos tracked</p>
           </div>
           
           <div class="card">
             <h3>🚫 Blocks</h3>
-            <div style="font-size: 32px; font-weight: 600; margin-top: 10px;">${totalBlocks}</div>
+            <div style="font-size: 32px; font-weight: 600; margin-top: 10px;">${blockCount}</div>
             <p style="color: var(--text-secondary); margin-top: 5px;">Active blocks</p>
           </div>
         </div>
@@ -342,39 +222,32 @@ function getDashboardPage() {
     `;
   } catch (error) {
     console.error('Error generating dashboard:', error);
-    return `
-      <div class="page">
-        <div class="empty-state">
-          <h3>Error</h3>
-          <p>${error.message}</p>
-        </div>
-      </div>
-    `;
+    throw error;
   }
 }
 
 // Watch History page
-function getWatchHistoryPage() {
-  const history = getAll(`
+async function getWatchHistoryPage() {
+  const history = await ipcRenderer.invoke('db-query', `
     SELECT wh.*, d.name as device_name
     FROM watch_history wh
     LEFT JOIN devices d ON wh.device_id = d.id
     ORDER BY wh.watched_at DESC
     LIMIT 50
-  `, []);
+  `);
 
   return `
     <div class="page">
       <div class="page-header">
         <h1>Watch History</h1>
-        <p>Videos watched across all devices</p>
+        <p>Videos watched across all devices <span style="font-size: 12px; color: var(--text-secondary);">(Auto-refreshes every 5s)</span></p>
       </div>
       
       ${history.length === 0 ? `
         <div class="empty-state">
           <div class="empty-state-icon">🎬</div>
           <h3>No watch history yet</h3>
-          <p>Watch history will appear here once devices start tracking</p>
+          <p>Run the test script to add sample videos</p>
         </div>
       ` : `
         <div class="card">
@@ -413,8 +286,8 @@ function getWatchHistoryPage() {
 }
 
 // Blocks page
-function getBlocksPage() {
-  const blocks = getAll('SELECT * FROM blocks ORDER BY created_at DESC', []);
+async function getBlocksPage() {
+  const blocks = await ipcRenderer.invoke('db-query', 'SELECT * FROM blocks ORDER BY created_at DESC');
 
   return `
     <div class="page">
@@ -465,21 +338,21 @@ function getBlocksPage() {
 }
 
 // Devices page
-function getDevicesPage() {
-  const devices = getAll('SELECT * FROM devices ORDER BY created_at DESC', []);
+async function getDevicesPage() {
+  const devices = await ipcRenderer.invoke('db-query', 'SELECT * FROM devices ORDER BY created_at DESC');
 
   return `
     <div class="page">
       <div class="page-header">
         <h1>Devices</h1>
-        <p>Manage registered devices</p>
+        <p>Manage registered devices <span style="font-size: 12px; color: var(--text-secondary);">(Auto-refreshes every 5s)</span></p>
       </div>
       
       ${devices.length === 0 ? `
         <div class="empty-state">
           <div class="empty-state-icon">📱</div>
           <h3>No devices registered</h3>
-          <p>Install the Chrome extension to register a device</p>
+          <p>Run: <code>.\\test-api.ps1</code> to register a test device</p>
         </div>
       ` : `
         <div class="card">
@@ -518,8 +391,7 @@ function getDevicesPage() {
 // Settings page
 function getSettingsPage() {
   const apiUrl = 'http://localhost:3000';
-  const theme = getOne('SELECT value FROM settings WHERE key = ?', ['theme']);
-  currentTheme = theme ? theme.value : 'light';
+  currentTheme = localStorage.getItem('theme') || 'light';
 
   return `
     <div class="page">
@@ -528,23 +400,6 @@ function getSettingsPage() {
         <p>Configure your YouTube Monitor</p>
       </div>
       
-      <div class="card">
-        <h3>Admin Password</h3>
-        <div class="form-group">
-          <label>Current Password</label>
-          <input type="password" id="current-password" placeholder="Enter current password">
-        </div>
-        <div class="form-group">
-          <label>New Password</label>
-          <input type="password" id="new-password" placeholder="Enter new password">
-        </div>
-        <div class="form-group">
-          <label>Confirm New Password</label>
-          <input type="password" id="confirm-password" placeholder="Confirm new password">
-        </div>
-        <button class="btn" onclick="changePassword()">Change Password</button>
-      </div>
-
       <div class="card">
         <h3>API Configuration</h3>
         <div class="form-group">
@@ -569,6 +424,12 @@ function getSettingsPage() {
       </div>
 
       <div class="card">
+        <h3>Database</h3>
+        <p><strong>Location:</strong> <code style="font-size: 11px;">%APPDATA%\\youtube-monitor\\youtube-monitor.db</code></p>
+        <button class="btn" onclick="openDatabaseFolder()" style="margin-top: 10px;">Open Database Folder</button>
+      </div>
+
+      <div class="card">
         <h3>About</h3>
         <p><strong>Version:</strong> 1.0.0</p>
         <p style="margin-top: 10px;"><strong>Status:</strong> Phase 1 - Core Desktop App</p>
@@ -584,60 +445,20 @@ function setupSettingsHandlers() {
   if (themeToggle) {
     themeToggle.addEventListener('change', (e) => {
       const theme = e.target.checked ? 'dark' : 'light';
-      execQuery('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['theme', theme]);
+      localStorage.setItem('theme', theme);
       applyTheme(theme);
     });
   }
 }
 
-window.changePassword = async function() {
-  try {
-    const current = document.getElementById('current-password').value;
-    const newPass = document.getElementById('new-password').value;
-    const confirm = document.getElementById('confirm-password').value;
-
-    if (!current || !newPass || !confirm) {
-      alert('Please fill in all fields');
-      return;
-    }
-
-    if (newPass !== confirm) {
-      alert('New passwords do not match');
-      return;
-    }
-
-    if (newPass.length < 4) {
-      alert('Password must be at least 4 characters');
-      return;
-    }
-
-    const storedHash = getOne('SELECT value FROM settings WHERE key = ?', ['admin_password']).value;
-    const valid = await bcrypt.compare(current, storedHash);
-
-    if (!valid) {
-      alert('Current password is incorrect');
-      return;
-    }
-
-    const newHash = await bcrypt.hash(newPass, 10);
-    execQuery('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['admin_password', newHash]);
-    
-    alert('Password changed successfully');
-    document.getElementById('current-password').value = '';
-    document.getElementById('new-password').value = '';
-    document.getElementById('confirm-password').value = '';
-  } catch (error) {
-    console.error('Error changing password:', error);
-    alert('Failed to change password: ' + error.message);
-  }
+window.openDatabaseFolder = function() {
+  ipcRenderer.send('open-database-folder');
 };
 
 // Theme functions
 function loadTheme() {
-  const theme = getOne('SELECT value FROM settings WHERE key = ?', ['theme']);
-  if (theme) {
-    applyTheme(theme.value);
-  }
+  const theme = localStorage.getItem('theme') || 'light';
+  applyTheme(theme);
 }
 
 function applyTheme(theme) {

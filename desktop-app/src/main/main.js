@@ -1,7 +1,7 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, protocol, nativeImage } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, protocol, nativeImage, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { initDatabase } = require('../database/db');
+const { initDatabase, getAll } = require('../database/db');
 const { startAPIServer } = require('../api/server');
 
 let mainWindow;
@@ -26,26 +26,19 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
-      // Security: Disable remote module
       enableRemoteModule: false,
-      // Security: Web security enabled
       webSecurity: true,
-      // Security: Disable node integration in workers
       nodeIntegrationInWorker: false,
-      // Security: Disable experimental features
       experimentalFeatures: false,
-      // Security: Enable sandbox (Electron 33+)
-      sandbox: false // Set to false for nodeIntegration compatibility
+      sandbox: false
     },
-    // Use default icon if custom not found
     minWidth: 800,
     minHeight: 600,
-    show: false // Don't show until ready
+    show: false
   });
 
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
 
-  // Show when ready
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
   });
@@ -55,7 +48,6 @@ function createWindow() {
     mainWindow.webContents.openDevTools();
   }
 
-  // Security: Disable navigation to external sites
   mainWindow.webContents.on('will-navigate', (event, url) => {
     const parsedUrl = new URL(url);
     if (parsedUrl.protocol !== 'file:') {
@@ -64,17 +56,14 @@ function createWindow() {
     }
   });
 
-  // Security: Disable opening new windows
   mainWindow.webContents.setWindowOpenHandler(() => {
     return { action: 'deny' };
   });
 
-  // Security: Disable downloading files
   mainWindow.webContents.session.on('will-download', (event) => {
     event.preventDefault();
   });
 
-  // Handle window close - minimize to tray
   mainWindow.on('close', (event) => {
     if (!app.isQuitting) {
       event.preventDefault();
@@ -92,7 +81,6 @@ function createTray() {
   try {
     const iconPath = path.join(__dirname, '../../resources/icon.png');
     
-    // Check if icon exists
     if (!fs.existsSync(iconPath)) {
       console.warn('Tray icon not found at:', iconPath);
       console.warn('Tray icon disabled - app will run without system tray');
@@ -128,7 +116,6 @@ function createTray() {
     tray.setToolTip('YouTube Monitor');
     tray.setContextMenu(contextMenu);
 
-    // Double click to show
     tray.on('double-click', () => {
       if (mainWindow) {
         mainWindow.show();
@@ -166,7 +153,7 @@ app.whenReady().then(async () => {
   // Create window
   createWindow();
   
-  // Create tray (optional - won't fail if icon missing)
+  // Create tray (optional)
   createTray();
 
   // Set auto-launch (Windows)
@@ -186,9 +173,8 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  // Keep running in background on Windows
   if (process.platform !== 'darwin') {
-    // Don't quit - allow running in background
+    // Don't quit
   }
 });
 
@@ -210,24 +196,38 @@ app.on('before-quit', () => {
   }
 });
 
-// Security: Limit IPC handlers and validate input
+// IPC handlers
 ipcMain.handle('get-app-path', () => {
   return app.getPath('userData');
 });
 
-// Security: Disable eval and prevent webview attachments
+// Database query handler
+ipcMain.handle('db-query', (event, sql) => {
+  try {
+    const results = getAll(sql);
+    return results;
+  } catch (error) {
+    console.error('Database query error:', error);
+    throw error;
+  }
+});
+
+// Open database folder
+ipcMain.on('open-database-folder', () => {
+  const dbPath = path.join(app.getPath('userData'));
+  shell.openPath(dbPath);
+});
+
+// Security handlers
 app.on('web-contents-created', (event, contents) => {
   contents.on('will-attach-webview', (event) => {
     event.preventDefault();
   });
   
-  // Prevent renderer process from accessing Node.js in new windows
   contents.setWindowOpenHandler(() => ({ action: 'deny' }));
 });
 
-// Security: Handle certificate errors in production
 app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
-  // In production, always reject certificate errors
   event.preventDefault();
   callback(false);
   console.error('Certificate error:', error, 'for', url);
