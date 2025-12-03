@@ -20,9 +20,19 @@ async function init() {
     dbPath = path.join(appPath, 'youtube-monitor.db');
     console.log('Database path:', dbPath);
     
-    // Initialize SQL.js
+    // Initialize SQL.js with explicit wasm path
     console.log('Initializing SQL.js...');
-    const SQL = await initSqlJs();
+    const wasmPath = path.join(__dirname, '../../node_modules/sql.js/dist/sql-wasm.wasm');
+    console.log('WASM path:', wasmPath);
+    
+    const SQL = await initSqlJs({
+      locateFile: file => {
+        // Return the path to the wasm file
+        const wasmFilePath = path.join(__dirname, '../../node_modules/sql.js/dist', file);
+        console.log('Loading WASM file from:', wasmFilePath);
+        return wasmFilePath;
+      }
+    });
     console.log('SQL.js initialized');
     
     // Load database

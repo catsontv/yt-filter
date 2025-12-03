@@ -18,8 +18,15 @@ async function initDatabase() {
   const dbPath = getDbPath();
   console.log('Database path:', dbPath);
   
-  // Initialize SQL.js
-  SQL = await initSqlJs();
+  // Initialize SQL.js with explicit wasm path for Electron
+  SQL = await initSqlJs({
+    locateFile: file => {
+      // In Electron, we need to provide the path relative to the app
+      const wasmPath = path.join(__dirname, '../../node_modules/sql.js/dist', file);
+      console.log('Loading WASM from:', wasmPath);
+      return wasmPath;
+    }
+  });
   
   // Load existing database or create new one
   let data;
