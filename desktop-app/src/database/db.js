@@ -1,9 +1,10 @@
-const Database = require('better-sqlite3');
+const initSqlJs = require('sql.js');
 const path = require('path');
 const { app } = require('electron');
 const fs = require('fs');
 
 let db;
+let SQL;
 
 function getDbPath() {
   const userDataPath = app.getPath('userData');
@@ -13,12 +14,23 @@ function getDbPath() {
   return path.join(userDataPath, 'youtube-monitor.db');
 }
 
-function initDatabase() {
+async function initDatabase() {
   const dbPath = getDbPath();
   console.log('Database path:', dbPath);
   
-  db = new Database(dbPath);
-  db.pragma('journal_mode = WAL');
+  // Initialize SQL.js
+  SQL = await initSqlJs();
+  
+  // Load existing database or create new one
+  let data;
+  if (fs.existsSync(dbPath)) {
+    data = fs.readFileSync(dbPath);
+    db = new SQL.Database(data);
+    console.log('Loaded existing database');
+  } else {
+    db = new SQL.Database();
+    console.log('Created new database');
+  }
 
   // Create tables
   const schema = `
@@ -89,16 +101,75 @@ function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_block_attempts_device ON block_attempts(device_id);
   `;
 
-  db.exec(schema);
+  db.run(schema);
+  
+  // Save database to file
+  saveDatabase();
+  
   console.log('Database initialized successfully');
   return db;
+}
+
+function saveDatabase() {
+  if (db) {
+    const data = db.export();
+    const buffer = Buffer.from(data);
+    fs.writeFileSync(getDbPath(), buffer);
+  }
 }
 
 function getDatabase() {
   return db;
 }
 
+function execQuery(sql, params = []) {
+  try {
+    db.run(sql, params);
+    saveDatabase();
+  } catch (error) {
+    console.error('Query error:', error);
+    throw error;
+  }
+}
+
+function getOne(sql, params = []) {
+  try {
+    const stmt = db.prepare(sql);
+    stmt.bind(params);
+    if (stmt.step()) {
+      const row = stmt.getAsObject();
+      stmt.free();
+      return row;
+    }
+    stmt.free();
+    return null;
+  } catch (error) {
+    console.error('Query error:', error);
+    throw error;
+  }
+}
+
+function getAll(sql, params = []) {
+  try {
+    const stmt = db.prepare(sql);
+    stmt.bind(params);
+    const rows = [];
+    while (stmt.step()) {
+      rows.push(stmt.getAsObject());
+    }
+    stmt.free();
+    return rows;
+  } catch (error) {
+    console.error('Query error:', error);
+    throw error;
+  }
+}
+
 module.exports = {
   initDatabase,
-  getDatabase
+  getDatabase,
+  saveDatabase,
+  execQuery,
+  getOne,
+  getAll
 };

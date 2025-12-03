@@ -1,22 +1,34 @@
 const { ipcRenderer } = require('electron');
-const Database = require('better-sqlite3');
-const bcrypt = require('bcrypt');
+const initSqlJs = require('sql.js');
+const bcrypt = require('bcryptjs');
+const fs = require('fs');
+const path = require('path');
 
 let db;
 let currentPage = 'dashboard';
 let currentTheme = 'light';
 let isPasswordSet = false;
+let dbPath;
 
 // Initialize app
 async function init() {
   // Get database path
   const appPath = await ipcRenderer.invoke('get-app-path');
-  const dbPath = `${appPath}/youtube-monitor.db`;
+  dbPath = path.join(appPath, 'youtube-monitor.db');
   
-  db = new Database(dbPath);
+  // Initialize SQL.js
+  const SQL = await initSqlJs();
+  
+  // Load database
+  if (fs.existsSync(dbPath)) {
+    const data = fs.readFileSync(dbPath);
+    db = new SQL.Database(data);
+  } else {
+    db = new SQL.Database();
+  }
 
   // Check if password is set
-  const password = db.prepare('SELECT value FROM settings WHERE key = ?').get('admin_password');
+  const password = getOne('SELECT value FROM settings WHERE key = ?', ['admin_password']);
   isPasswordSet = !!password;
 
   if (!isPasswordSet) {
@@ -26,6 +38,42 @@ async function init() {
     loadPage('dashboard');
     setupNavigation();
   }
+}
+
+function saveDatabase() {
+  if (db) {
+    const data = db.export();
+    const buffer = Buffer.from(data);
+    fs.writeFileSync(dbPath, buffer);
+  }
+}
+
+function execQuery(sql, params = []) {
+  db.run(sql, params);
+  saveDatabase();
+}
+
+function getOne(sql, params = []) {
+  const stmt = db.prepare(sql);
+  stmt.bind(params);
+  if (stmt.step()) {
+    const row = stmt.getAsObject();
+    stmt.free();
+    return row;
+  }
+  stmt.free();
+  return null;
+}
+
+function getAll(sql, params = []) {
+  const stmt = db.prepare(sql);
+  stmt.bind(params);
+  const rows = [];
+  while (stmt.step()) {
+    rows.push(stmt.getAsObject());
+  }
+  stmt.free();
+  return rows;
 }
 
 // Password setup modal
@@ -69,7 +117,7 @@ window.savePassword = async function() {
   }
 
   const hash = await bcrypt.hash(password, 10);
-  db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('admin_password', hash);
+  execQuery('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['admin_password', hash]);
   
   isPasswordSet = true;
   document.querySelector('.modal').remove();
@@ -121,9 +169,9 @@ function loadPage(page) {
 
 // Dashboard page
 function getDashboardPage() {
-  const devices = db.prepare('SELECT * FROM devices').all();
-  const totalVideos = db.prepare('SELECT COUNT(*) as count FROM watch_history').get().count;
-  const totalBlocks = db.prepare('SELECT COUNT(*) as count FROM blocks').get().count;
+  const devices = getAll('SELECT * FROM devices', []);
+  const totalVideos = getOne('SELECT COUNT(*) as count FROM watch_history', [])?.count || 0;
+  const totalBlocks = getOne('SELECT COUNT(*) as count FROM blocks', [])?.count || 0;
 
   if (devices.length === 0) {
     return `
@@ -199,13 +247,13 @@ function getDashboardPage() {
 
 // Watch History page
 function getWatchHistoryPage() {
-  const history = db.prepare(`
+  const history = getAll(`
     SELECT wh.*, d.name as device_name
     FROM watch_history wh
     LEFT JOIN devices d ON wh.device_id = d.id
     ORDER BY wh.watched_at DESC
     LIMIT 50
-  `).all();
+  `, []);
 
   return `
     <div class="page">
@@ -258,7 +306,7 @@ function getWatchHistoryPage() {
 
 // Blocks page
 function getBlocksPage() {
-  const blocks = db.prepare('SELECT * FROM blocks ORDER BY created_at DESC').all();
+  const blocks = getAll('SELECT * FROM blocks ORDER BY created_at DESC', []);
 
   return `
     <div class="page">
@@ -310,7 +358,7 @@ function getBlocksPage() {
 
 // Devices page
 function getDevicesPage() {
-  const devices = db.prepare('SELECT * FROM devices ORDER BY created_at DESC').all();
+  const devices = getAll('SELECT * FROM devices ORDER BY created_at DESC', []);
 
   return `
     <div class="page">
@@ -362,7 +410,7 @@ function getDevicesPage() {
 // Settings page
 function getSettingsPage() {
   const apiUrl = 'http://localhost:3000';
-  const theme = db.prepare('SELECT value FROM settings WHERE key = ?').get('theme');
+  const theme = getOne('SELECT value FROM settings WHERE key = ?', ['theme']);
   currentTheme = theme ? theme.value : 'light';
 
   return `
@@ -428,7 +476,7 @@ function setupSettingsHandlers() {
   if (themeToggle) {
     themeToggle.addEventListener('change', (e) => {
       const theme = e.target.checked ? 'dark' : 'light';
-      db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('theme', theme);
+      execQuery('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['theme', theme]);
       applyTheme(theme);
     });
   }
@@ -454,7 +502,7 @@ window.changePassword = async function() {
     return;
   }
 
-  const storedHash = db.prepare('SELECT value FROM settings WHERE key = ?').get('admin_password').value;
+  const storedHash = getOne('SELECT value FROM settings WHERE key = ?', ['admin_password']).value;
   const valid = await bcrypt.compare(current, storedHash);
 
   if (!valid) {
@@ -463,7 +511,7 @@ window.changePassword = async function() {
   }
 
   const newHash = await bcrypt.hash(newPass, 10);
-  db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('admin_password', newHash);
+  execQuery('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['admin_password', newHash]);
   
   alert('Password changed successfully');
   document.getElementById('current-password').value = '';
@@ -473,7 +521,7 @@ window.changePassword = async function() {
 
 // Theme functions
 function loadTheme() {
-  const theme = db.prepare('SELECT value FROM settings WHERE key = ?').get('theme');
+  const theme = getOne('SELECT value FROM settings WHERE key = ?', ['theme']);
   if (theme) {
     applyTheme(theme.value);
   }
