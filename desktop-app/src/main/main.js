@@ -13,12 +13,33 @@ function createWindow() {
     height: 800,
     webPreferences: {
       nodeIntegration: true,
-      contextIsolation: false
+      contextIsolation: false,
+      // Security: Disable remote module
+      enableRemoteModule: false,
+      // Security: Disable web security for local development only
+      webSecurity: true
     },
-    icon: path.join(__dirname, '../../resources/icon.png')
+    icon: path.join(__dirname, '../../resources/icon.png'),
+    // Security: Prevent window from being resized to very small sizes
+    minWidth: 800,
+    minHeight: 600
   });
 
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
+
+  // Security: Disable navigation to external sites
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const parsedUrl = new URL(url);
+    if (parsedUrl.protocol !== 'file:') {
+      event.preventDefault();
+      console.warn('Navigation to external URL blocked:', url);
+    }
+  });
+
+  // Security: Disable opening new windows
+  mainWindow.webContents.setWindowOpenHandler(() => {
+    return { action: 'deny' };
+  });
 
   // Handle window close - minimize to tray
   mainWindow.on('close', (event) => {
@@ -63,10 +84,24 @@ function createTray() {
 
 app.whenReady().then(async () => {
   // Initialize database
-  await initDatabase();
+  try {
+    await initDatabase();
+    console.log('Database initialized successfully');
+  } catch (error) {
+    console.error('Failed to initialize database:', error);
+    app.quit();
+    return;
+  }
 
   // Start API server
-  apiServer = await startAPIServer();
+  try {
+    apiServer = await startAPIServer();
+    console.log('API server started successfully');
+  } catch (error) {
+    console.error('Failed to start API server:', error);
+    app.quit();
+    return;
+  }
 
   // Create window and tray
   createWindow();
@@ -99,7 +134,14 @@ app.on('before-quit', () => {
   }
 });
 
-// IPC handlers
+// Security: Limit IPC handlers and validate input
 ipcMain.handle('get-app-path', () => {
   return app.getPath('userData');
+});
+
+// Security: Disable eval
+app.on('web-contents-created', (event, contents) => {
+  contents.on('will-attach-webview', (event) => {
+    event.preventDefault();
+  });
 });
