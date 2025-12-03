@@ -117,6 +117,22 @@ async function initDatabase() {
   return db;
 }
 
+function reloadDatabase() {
+  try {
+    const dbPath = getDbPath();
+    if (fs.existsSync(dbPath)) {
+      const data = fs.readFileSync(dbPath);
+      // Close old database if it exists
+      if (db) {
+        db.close();
+      }
+      db = new SQL.Database(data);
+    }
+  } catch (error) {
+    console.error('Error reloading database:', error);
+  }
+}
+
 function saveDatabase() {
   if (db) {
     const data = db.export();
@@ -141,6 +157,9 @@ function execQuery(sql, params = []) {
 
 function getOne(sql, params = []) {
   try {
+    // Reload database from disk to get latest changes
+    reloadDatabase();
+    
     const stmt = db.prepare(sql);
     stmt.bind(params);
     if (stmt.step()) {
@@ -158,6 +177,9 @@ function getOne(sql, params = []) {
 
 function getAll(sql, params = []) {
   try {
+    // Reload database from disk to get latest changes
+    reloadDatabase();
+    
     const stmt = db.prepare(sql);
     stmt.bind(params);
     const rows = [];
@@ -168,7 +190,7 @@ function getAll(sql, params = []) {
     return rows;
   } catch (error) {
     console.error('Query error:', error);
-    throw error;
+    return [];
   }
 }
 
