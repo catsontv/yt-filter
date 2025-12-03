@@ -1,5 +1,6 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, protocol } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, protocol, nativeImage } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const { initDatabase } = require('../database/db');
 const { startAPIServer } = require('../api/server');
 
@@ -36,13 +37,23 @@ function createWindow() {
       // Security: Enable sandbox (Electron 33+)
       sandbox: false // Set to false for nodeIntegration compatibility
     },
-    icon: path.join(__dirname, '../../resources/icon.png'),
-    // Security: Prevent window from being resized to very small sizes
+    // Use default icon if custom not found
     minWidth: 800,
-    minHeight: 600
+    minHeight: 600,
+    show: false // Don't show until ready
   });
 
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
+
+  // Show when ready
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+  });
+
+  // Open DevTools in development
+  if (!app.isPackaged) {
+    mainWindow.webContents.openDevTools();
+  }
 
   // Security: Disable navigation to external sites
   mainWindow.webContents.on('will-navigate', (event, url) => {
@@ -78,30 +89,57 @@ function createWindow() {
 }
 
 function createTray() {
-  tray = new Tray(path.join(__dirname, '../../resources/icon.png'));
-  const contextMenu = Menu.buildFromTemplate([
-    {
-      label: 'Show App',
-      click: () => {
+  try {
+    const iconPath = path.join(__dirname, '../../resources/icon.png');
+    
+    // Check if icon exists
+    if (!fs.existsSync(iconPath)) {
+      console.warn('Tray icon not found at:', iconPath);
+      console.warn('Tray icon disabled - app will run without system tray');
+      return;
+    }
+
+    const icon = nativeImage.createFromPath(iconPath);
+    
+    if (icon.isEmpty()) {
+      console.warn('Failed to load tray icon');
+      return;
+    }
+
+    tray = new Tray(icon);
+    const contextMenu = Menu.buildFromTemplate([
+      {
+        label: 'Show App',
+        click: () => {
+          if (mainWindow) {
+            mainWindow.show();
+          }
+        }
+      },
+      {
+        label: 'Quit',
+        click: () => {
+          app.isQuitting = true;
+          app.quit();
+        }
+      }
+    ]);
+
+    tray.setToolTip('YouTube Monitor');
+    tray.setContextMenu(contextMenu);
+
+    // Double click to show
+    tray.on('double-click', () => {
+      if (mainWindow) {
         mainWindow.show();
       }
-    },
-    {
-      label: 'Quit',
-      click: () => {
-        app.isQuitting = true;
-        app.quit();
-      }
-    }
-  ]);
+    });
 
-  tray.setToolTip('YouTube Monitor');
-  tray.setContextMenu(contextMenu);
-
-  // Double click to show
-  tray.on('double-click', () => {
-    mainWindow.show();
-  });
+    console.log('✓ System tray initialized');
+  } catch (error) {
+    console.warn('Failed to create system tray:', error.message);
+    console.warn('App will run without system tray icon');
+  }
 }
 
 app.whenReady().then(async () => {
@@ -125,15 +163,22 @@ app.whenReady().then(async () => {
     return;
   }
 
-  // Create window and tray
+  // Create window
   createWindow();
+  
+  // Create tray (optional - won't fail if icon missing)
   createTray();
 
   // Set auto-launch (Windows)
-  app.setLoginItemSettings({
-    openAtLogin: true,
-    path: app.getPath('exe')
-  });
+  try {
+    app.setLoginItemSettings({
+      openAtLogin: true,
+      path: app.getPath('exe')
+    });
+    console.log('✓ Auto-start enabled');
+  } catch (error) {
+    console.warn('Could not enable auto-start:', error.message);
+  }
 
   console.log('✓ YouTube Monitor started');
   console.log('✓ Security features enabled');
@@ -141,9 +186,9 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  // Keep running in background
+  // Keep running in background on Windows
   if (process.platform !== 'darwin') {
-    // Don't quit
+    // Don't quit - allow running in background
   }
 });
 
@@ -156,7 +201,12 @@ app.on('activate', () => {
 app.on('before-quit', () => {
   app.isQuitting = true;
   if (apiServer) {
-    apiServer.close();
+    try {
+      apiServer.close();
+      console.log('✓ API server stopped');
+    } catch (error) {
+      console.error('Error stopping API server:', error);
+    }
   }
 });
 
