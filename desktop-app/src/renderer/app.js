@@ -12,68 +12,106 @@ let dbPath;
 
 // Initialize app
 async function init() {
-  // Get database path
-  const appPath = await ipcRenderer.invoke('get-app-path');
-  dbPath = path.join(appPath, 'youtube-monitor.db');
-  
-  // Initialize SQL.js
-  const SQL = await initSqlJs();
-  
-  // Load database
-  if (fs.existsSync(dbPath)) {
-    const data = fs.readFileSync(dbPath);
-    db = new SQL.Database(data);
-  } else {
-    db = new SQL.Database();
-  }
+  try {
+    console.log('Starting initialization...');
+    
+    // Get database path
+    const appPath = await ipcRenderer.invoke('get-app-path');
+    dbPath = path.join(appPath, 'youtube-monitor.db');
+    console.log('Database path:', dbPath);
+    
+    // Initialize SQL.js
+    console.log('Initializing SQL.js...');
+    const SQL = await initSqlJs();
+    console.log('SQL.js initialized');
+    
+    // Load database
+    if (fs.existsSync(dbPath)) {
+      console.log('Loading existing database...');
+      const data = fs.readFileSync(dbPath);
+      db = new SQL.Database(data);
+      console.log('Database loaded');
+    } else {
+      console.log('Creating new database...');
+      db = new SQL.Database();
+      console.log('Database created');
+    }
 
-  // Check if password is set
-  const password = getOne('SELECT value FROM settings WHERE key = ?', ['admin_password']);
-  isPasswordSet = !!password;
+    // Check if password is set
+    console.log('Checking password status...');
+    const password = getOne('SELECT value FROM settings WHERE key = ?', ['admin_password']);
+    isPasswordSet = !!password;
+    console.log('Password set:', isPasswordSet);
 
-  if (!isPasswordSet) {
-    showPasswordSetup();
-  } else {
-    loadTheme();
-    loadPage('dashboard');
-    setupNavigation();
+    if (!isPasswordSet) {
+      console.log('Showing password setup modal...');
+      showPasswordSetup();
+    } else {
+      console.log('Loading theme and dashboard...');
+      loadTheme();
+      loadPage('dashboard');
+      setupNavigation();
+      console.log('Initialization complete');
+    }
+  } catch (error) {
+    console.error('Initialization error:', error);
+    alert('Failed to initialize app: ' + error.message);
   }
 }
 
 function saveDatabase() {
-  if (db) {
-    const data = db.export();
-    const buffer = Buffer.from(data);
-    fs.writeFileSync(dbPath, buffer);
+  try {
+    if (db) {
+      const data = db.export();
+      const buffer = Buffer.from(data);
+      fs.writeFileSync(dbPath, buffer);
+    }
+  } catch (error) {
+    console.error('Error saving database:', error);
   }
 }
 
 function execQuery(sql, params = []) {
-  db.run(sql, params);
-  saveDatabase();
+  try {
+    db.run(sql, params);
+    saveDatabase();
+  } catch (error) {
+    console.error('Error executing query:', error);
+    throw error;
+  }
 }
 
 function getOne(sql, params = []) {
-  const stmt = db.prepare(sql);
-  stmt.bind(params);
-  if (stmt.step()) {
-    const row = stmt.getAsObject();
+  try {
+    const stmt = db.prepare(sql);
+    stmt.bind(params);
+    if (stmt.step()) {
+      const row = stmt.getAsObject();
+      stmt.free();
+      return row;
+    }
     stmt.free();
-    return row;
+    return null;
+  } catch (error) {
+    console.error('Error in getOne:', error);
+    return null;
   }
-  stmt.free();
-  return null;
 }
 
 function getAll(sql, params = []) {
-  const stmt = db.prepare(sql);
-  stmt.bind(params);
-  const rows = [];
-  while (stmt.step()) {
-    rows.push(stmt.getAsObject());
+  try {
+    const stmt = db.prepare(sql);
+    stmt.bind(params);
+    const rows = [];
+    while (stmt.step()) {
+      rows.push(stmt.getAsObject());
+    }
+    stmt.free();
+    return rows;
+  } catch (error) {
+    console.error('Error in getAll:', error);
+    return [];
   }
-  stmt.free();
-  return rows;
 }
 
 // Password setup modal
@@ -100,149 +138,209 @@ function showPasswordSetup() {
     </div>
   `;
   document.body.appendChild(modal);
+  console.log('Password setup modal shown');
 }
 
 window.savePassword = async function() {
-  const password = document.getElementById('setup-password').value;
-  const confirm = document.getElementById('setup-password-confirm').value;
+  try {
+    const password = document.getElementById('setup-password').value;
+    const confirm = document.getElementById('setup-password-confirm').value;
 
-  if (!password || password.length < 4) {
-    alert('Password must be at least 4 characters');
-    return;
+    if (!password || password.length < 4) {
+      alert('Password must be at least 4 characters');
+      return;
+    }
+
+    if (password !== confirm) {
+      alert('Passwords do not match');
+      return;
+    }
+
+    console.log('Hashing password...');
+    const hash = await bcrypt.hash(password, 10);
+    console.log('Password hashed, saving to database...');
+    execQuery('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['admin_password', hash]);
+    
+    isPasswordSet = true;
+    document.querySelector('.modal').remove();
+    console.log('Password saved, loading dashboard...');
+    loadTheme();
+    loadPage('dashboard');
+    setupNavigation();
+  } catch (error) {
+    console.error('Error saving password:', error);
+    alert('Failed to save password: ' + error.message);
   }
-
-  if (password !== confirm) {
-    alert('Passwords do not match');
-    return;
-  }
-
-  const hash = await bcrypt.hash(password, 10);
-  execQuery('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['admin_password', hash]);
-  
-  isPasswordSet = true;
-  document.querySelector('.modal').remove();
-  loadTheme();
-  loadPage('dashboard');
-  setupNavigation();
 };
 
 // Setup navigation
 function setupNavigation() {
-  const navLinks = document.querySelectorAll('.nav-link');
-  navLinks.forEach(link => {
-    link.addEventListener('click', (e) => {
-      e.preventDefault();
-      const page = link.getAttribute('data-page');
-      loadPage(page);
-      
-      // Update active state
-      navLinks.forEach(l => l.classList.remove('active'));
-      link.classList.add('active');
+  try {
+    console.log('Setting up navigation...');
+    const navLinks = document.querySelectorAll('.nav-link');
+    console.log('Found', navLinks.length, 'navigation links');
+    
+    navLinks.forEach((link, index) => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        const page = link.getAttribute('data-page');
+        console.log('Navigation clicked:', page);
+        loadPage(page);
+        
+        // Update active state
+        navLinks.forEach(l => l.classList.remove('active'));
+        link.classList.add('active');
+      });
+      console.log(`Navigation ${index + 1} setup complete`);
     });
-  });
+    console.log('Navigation setup complete');
+  } catch (error) {
+    console.error('Error setting up navigation:', error);
+  }
 }
 
 // Load page
 function loadPage(page) {
-  currentPage = page;
-  const content = document.getElementById('main-content');
-  
-  switch(page) {
-    case 'dashboard':
-      content.innerHTML = getDashboardPage();
-      break;
-    case 'watch-history':
-      content.innerHTML = getWatchHistoryPage();
-      break;
-    case 'blocks':
-      content.innerHTML = getBlocksPage();
-      break;
-    case 'devices':
-      content.innerHTML = getDevicesPage();
-      break;
-    case 'settings':
-      content.innerHTML = getSettingsPage();
-      setupSettingsHandlers();
-      break;
+  try {
+    console.log('Loading page:', page);
+    currentPage = page;
+    const content = document.getElementById('main-content');
+    
+    if (!content) {
+      console.error('main-content element not found!');
+      return;
+    }
+    
+    let html = '';
+    switch(page) {
+      case 'dashboard':
+        html = getDashboardPage();
+        break;
+      case 'watch-history':
+        html = getWatchHistoryPage();
+        break;
+      case 'blocks':
+        html = getBlocksPage();
+        break;
+      case 'devices':
+        html = getDevicesPage();
+        break;
+      case 'settings':
+        html = getSettingsPage();
+        content.innerHTML = html;
+        setupSettingsHandlers();
+        console.log('Page loaded:', page);
+        return;
+    }
+    
+    content.innerHTML = html;
+    console.log('Page loaded:', page);
+  } catch (error) {
+    console.error('Error loading page:', error);
+    const content = document.getElementById('main-content');
+    if (content) {
+      content.innerHTML = `
+        <div class="page">
+          <div class="empty-state">
+            <h3>Error Loading Page</h3>
+            <p>${error.message}</p>
+          </div>
+        </div>
+      `;
+    }
   }
 }
 
 // Dashboard page
 function getDashboardPage() {
-  const devices = getAll('SELECT * FROM devices', []);
-  const totalVideos = getOne('SELECT COUNT(*) as count FROM watch_history', [])?.count || 0;
-  const totalBlocks = getOne('SELECT COUNT(*) as count FROM blocks', [])?.count || 0;
+  try {
+    console.log('Generating dashboard page...');
+    const devices = getAll('SELECT * FROM devices', []);
+    const totalVideos = getOne('SELECT COUNT(*) as count FROM watch_history', [])?.count || 0;
+    const totalBlocks = getOne('SELECT COUNT(*) as count FROM blocks', [])?.count || 0;
+    console.log('Dashboard data:', { devices: devices.length, videos: totalVideos, blocks: totalBlocks });
 
-  if (devices.length === 0) {
+    if (devices.length === 0) {
+      return `
+        <div class="page">
+          <div class="page-header">
+            <h1>Dashboard</h1>
+            <p>Overview of your YouTube monitoring</p>
+          </div>
+          <div class="empty-state">
+            <div class="empty-state-icon">📊</div>
+            <h3>No devices yet</h3>
+            <p>Install the Chrome extension on your child's device to get started</p>
+          </div>
+        </div>
+      `;
+    }
+
     return `
       <div class="page">
         <div class="page-header">
           <h1>Dashboard</h1>
           <p>Overview of your YouTube monitoring</p>
         </div>
+        
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px;">
+          <div class="card">
+            <h3>📱 Devices</h3>
+            <div style="font-size: 32px; font-weight: 600; margin-top: 10px;">${devices.length}</div>
+            <p style="color: var(--text-secondary); margin-top: 5px;">Registered devices</p>
+          </div>
+          
+          <div class="card">
+            <h3>🎬 Watch History</h3>
+            <div style="font-size: 32px; font-weight: 600; margin-top: 10px;">${totalVideos}</div>
+            <p style="color: var(--text-secondary); margin-top: 5px;">Videos tracked</p>
+          </div>
+          
+          <div class="card">
+            <h3>🚫 Blocks</h3>
+            <div style="font-size: 32px; font-weight: 600; margin-top: 10px;">${totalBlocks}</div>
+            <p style="color: var(--text-secondary); margin-top: 5px;">Active blocks</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Active Devices</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Device Name</th>
+                <th>Status</th>
+                <th>Last Seen</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${devices.map(device => `
+                <tr>
+                  <td>${device.name}</td>
+                  <td>
+                    <span class="status-badge ${device.is_online ? 'status-online' : 'status-offline'}">
+                      ${device.is_online ? '● Online' : '○ Offline'}
+                    </span>
+                  </td>
+                  <td>${device.last_heartbeat ? new Date(device.last_heartbeat).toLocaleString() : 'Never'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  } catch (error) {
+    console.error('Error generating dashboard:', error);
+    return `
+      <div class="page">
         <div class="empty-state">
-          <div class="empty-state-icon">📊</div>
-          <h3>No devices yet</h3>
-          <p>Install the Chrome extension on your child's device to get started</p>
+          <h3>Error</h3>
+          <p>${error.message}</p>
         </div>
       </div>
     `;
   }
-
-  return `
-    <div class="page">
-      <div class="page-header">
-        <h1>Dashboard</h1>
-        <p>Overview of your YouTube monitoring</p>
-      </div>
-      
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px;">
-        <div class="card">
-          <h3>📱 Devices</h3>
-          <div style="font-size: 32px; font-weight: 600; margin-top: 10px;">${devices.length}</div>
-          <p style="color: var(--text-secondary); margin-top: 5px;">Registered devices</p>
-        </div>
-        
-        <div class="card">
-          <h3>🎬 Watch History</h3>
-          <div style="font-size: 32px; font-weight: 600; margin-top: 10px;">${totalVideos}</div>
-          <p style="color: var(--text-secondary); margin-top: 5px;">Videos tracked</p>
-        </div>
-        
-        <div class="card">
-          <h3>🚫 Blocks</h3>
-          <div style="font-size: 32px; font-weight: 600; margin-top: 10px;">${totalBlocks}</div>
-          <p style="color: var(--text-secondary); margin-top: 5px;">Active blocks</p>
-        </div>
-      </div>
-
-      <div class="card">
-        <h3>Active Devices</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Device Name</th>
-              <th>Status</th>
-              <th>Last Seen</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${devices.map(device => `
-              <tr>
-                <td>${device.name}</td>
-                <td>
-                  <span class="status-badge ${device.is_online ? 'status-online' : 'status-offline'}">
-                    ${device.is_online ? '● Online' : '○ Offline'}
-                  </span>
-                </td>
-                <td>${device.last_heartbeat ? new Date(device.last_heartbeat).toLocaleString() : 'Never'}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  `;
 }
 
 // Watch History page
@@ -483,40 +581,45 @@ function setupSettingsHandlers() {
 }
 
 window.changePassword = async function() {
-  const current = document.getElementById('current-password').value;
-  const newPass = document.getElementById('new-password').value;
-  const confirm = document.getElementById('confirm-password').value;
+  try {
+    const current = document.getElementById('current-password').value;
+    const newPass = document.getElementById('new-password').value;
+    const confirm = document.getElementById('confirm-password').value;
 
-  if (!current || !newPass || !confirm) {
-    alert('Please fill in all fields');
-    return;
+    if (!current || !newPass || !confirm) {
+      alert('Please fill in all fields');
+      return;
+    }
+
+    if (newPass !== confirm) {
+      alert('New passwords do not match');
+      return;
+    }
+
+    if (newPass.length < 4) {
+      alert('Password must be at least 4 characters');
+      return;
+    }
+
+    const storedHash = getOne('SELECT value FROM settings WHERE key = ?', ['admin_password']).value;
+    const valid = await bcrypt.compare(current, storedHash);
+
+    if (!valid) {
+      alert('Current password is incorrect');
+      return;
+    }
+
+    const newHash = await bcrypt.hash(newPass, 10);
+    execQuery('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['admin_password', newHash]);
+    
+    alert('Password changed successfully');
+    document.getElementById('current-password').value = '';
+    document.getElementById('new-password').value = '';
+    document.getElementById('confirm-password').value = '';
+  } catch (error) {
+    console.error('Error changing password:', error);
+    alert('Failed to change password: ' + error.message);
   }
-
-  if (newPass !== confirm) {
-    alert('New passwords do not match');
-    return;
-  }
-
-  if (newPass.length < 4) {
-    alert('Password must be at least 4 characters');
-    return;
-  }
-
-  const storedHash = getOne('SELECT value FROM settings WHERE key = ?', ['admin_password']).value;
-  const valid = await bcrypt.compare(current, storedHash);
-
-  if (!valid) {
-    alert('Current password is incorrect');
-    return;
-  }
-
-  const newHash = await bcrypt.hash(newPass, 10);
-  execQuery('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['admin_password', newHash]);
-  
-  alert('Password changed successfully');
-  document.getElementById('current-password').value = '';
-  document.getElementById('new-password').value = '';
-  document.getElementById('confirm-password').value = '';
 };
 
 // Theme functions
@@ -537,4 +640,8 @@ function applyTheme(theme) {
 }
 
 // Initialize on load
-init();
+console.log('app.js loaded, starting initialization...');
+init().catch(error => {
+  console.error('Fatal initialization error:', error);
+  alert('Failed to start application: ' + error.message);
+});
