@@ -13,6 +13,22 @@ Phase 1 delivers:
 - ✅ Password setup
 - ✅ Theme toggle (light/dark)
 - ✅ Auto-start with Windows
+- ✅ **Security enhancements** (NEW)
+
+---
+
+## 🔒 Security Features
+
+This version includes production-ready security:
+- **Helmet** - Security headers (XSS protection, HSTS, CSP)
+- **Rate Limiting** - Prevents brute force attacks (100 requests/15min)
+- **Input Validation** - All API inputs validated and sanitized
+- **CORS Restrictions** - Only localhost origins allowed
+- **API Key Authentication** - UUID format validation
+- **SQL Injection Prevention** - Parameterized queries
+- **XSS Prevention** - Input sanitization
+- **Navigation Blocking** - Prevents external site navigation
+- **Window Security** - Disables remote module and new windows
 
 ---
 
@@ -33,15 +49,18 @@ cd desktop-app
 ### Step 2: Install Dependencies
 
 ```bash
+# Remove old node_modules if updating
+rmdir /s /q node_modules  # Windows
+# rm -rf node_modules     # macOS/Linux
+
+# Install fresh dependencies
 npm install
 ```
 
-This will install:
-- Electron (desktop framework)
-- Express (API server)
-- Better-sqlite3 (database)
-- Bcrypt (password hashing)
-- Other dependencies
+**Expected output:**
+- Should install ~380-400 packages
+- May show some warnings about deprecated transitive dependencies (this is normal)
+- Should complete without errors
 
 ### Step 3: Run the App
 
@@ -64,6 +83,7 @@ The app should launch automatically!
 **Expected result:**
 - Desktop app opens with a sidebar and main content area
 - Should see "Welcome to YouTube Monitor" modal
+- Console shows "Security features enabled" messages
 
 **Status:** ☐ Pass / ☐ Fail
 
@@ -305,7 +325,52 @@ Then check the app:
 
 ---
 
-### Test 12: Auto-Start on Windows ✅
+### Test 12: Security Features ✅ (NEW)
+
+**What to do:**
+
+#### Test A: Rate Limiting
+Send 110 requests quickly (use a script or spam the endpoint):
+```bash
+# This should fail after 100 requests
+for i in {1..110}; do curl http://localhost:3000/; done
+```
+
+**Expected:** After 100 requests, you get "Too many requests" error
+
+#### Test B: Invalid Input Validation
+```bash
+# Try to register with invalid device_id (special characters)
+curl -X POST http://localhost:3000/api/v1/register \
+  -H "Content-Type: application/json" \
+  -d '{"device_id":"test@#$%","device_name":"Test"}'
+```
+
+**Expected:** Returns validation error about invalid characters
+
+#### Test C: Invalid API Key
+```bash
+# Try to use invalid API key format
+curl -X GET http://localhost:3000/api/v1/heartbeat/test-123 \
+  -H "x-api-key: invalid-key-format"
+```
+
+**Expected:** Returns "Invalid API key format" error
+
+#### Test D: Device Mismatch
+```bash
+# Try to access another device's data
+curl -X GET http://localhost:3000/api/v1/blocks/different-device \
+  -H "x-api-key: <your-api-key-for-test-device-123>"
+```
+
+**Expected:** Returns "Access denied" error
+
+**Status:** ☐ Pass / ☐ Fail
+
+---
+
+### Test 13: Auto-Start on Windows ✅
 
 **What to do:**
 1. Close the app completely (right-click tray icon → Quit)
@@ -329,7 +394,7 @@ Then check the app:
 
 ### App won't start
 - Make sure you ran `npm install` first
-- Check if Node.js is installed: `node --version` (need v16+)
+- Check if Node.js is installed: `node --version` (need v18+)
 - Delete `node_modules` and run `npm install` again
 
 ### Database errors
@@ -345,14 +410,18 @@ Then check the app:
 - Check if system tray icons are hidden
 - Look for the arrow icon in the taskbar to show hidden icons
 
+### npm install warnings
+- Warnings about deprecated packages are normal (they're transitive dependencies)
+- As long as the install completes successfully, you're good to go
+
 ---
 
 ## Testing Summary
 
 Once you've completed all tests, count your results:
 
-- **Tests Passed:** ___ / 12
-- **Tests Failed:** ___ / 12
+- **Tests Passed:** ___ / 13
+- **Tests Failed:** ___ / 13
 
 ### Report Issues
 
@@ -361,6 +430,21 @@ If any tests fail, please report:
 2. What happened instead
 3. Any error messages you saw
 4. Screenshots if helpful
+
+---
+
+## Security Checklist ✅
+
+Verify these security features are working:
+
+- ☐ API only accepts requests from localhost
+- ☐ Rate limiting blocks excessive requests
+- ☐ Invalid input is rejected with validation errors
+- ☐ API keys must be valid UUIDs
+- ☐ Devices can only access their own data
+- ☐ Passwords are hashed (never stored in plain text)
+- ☐ SQL injection attempts are blocked
+- ☐ External navigation is blocked in app window
 
 ---
 
@@ -387,10 +471,14 @@ npm run build
 
 # Check database location
 echo %APPDATA%\youtube-monitor
+
+# Test API
+curl http://localhost:3000
 ```
 
 ---
 
-**Phase 1 Status:** Ready for Testing  
+**Phase 1 Status:** Ready for Testing (Security Hardened)  
 **Last Updated:** December 3, 2025  
-**Branch:** `phase-1-core-desktop-app`
+**Branch:** `phase-1-core-desktop-app`  
+**Security Level:** Production-Ready
