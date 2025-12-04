@@ -2,40 +2,83 @@
 
 > A Windows desktop application for parents to monitor and manage YouTube usage across multiple devices
 
-## 🚨 IMPORTANT - Critical Fix Applied (Dec 3, 2025)
-
-**Database synchronization issue has been FIXED!**
-
-If you previously tested Phase 1 and experienced issues with data not appearing:
-
-1. **Pull the latest changes:**
-   ```bash
-   git pull origin phase-1-core-desktop-app
-   ```
-
-2. **Follow the quick start guide:**
-   - [QUICK_START_AFTER_FIX.md](desktop-app/QUICK_START_AFTER_FIX.md)
-
-3. **Read what was fixed:**
-   - [FIX_SUMMARY.md](desktop-app/FIX_SUMMARY.md) - Executive overview
-   - [CRITICAL_FIX_APPLIED.md](desktop-app/CRITICAL_FIX_APPLIED.md) - Technical details
-
-**The app now works perfectly - data synchronizes immediately between API and UI!**
-
----
-
 ## 🎯 What Is This?
 
 YouTube Monitor is a comprehensive system for parents who want to:
 - Track what their kids watch on YouTube
-- Block specific videos, channels, or keywords
-- Set time limits and schedules
-- Monitor usage remotely (even when kids are away from home)
+- Block specific videos, channels, or keywords (Phase 3+)
+- Set time limits and schedules (Phase 4+)
+- Monitor usage remotely (Phase 6+)
 - Manage multiple devices from one dashboard
 
 **This is NOT about hiding monitoring - it's about responsible digital parenting with transparency.**
 
-## 🏗️ Architecture
+---
+
+## 🆕 PHASE 2 - EXTENSION INTEGRATION COMPLETE! ✅
+
+**New in Phase 2:**
+- ✅ Chrome extension that tracks YouTube watch history
+- ✅ Automatic device registration
+- ✅ Real-time heartbeat monitoring (online/offline status)
+- ✅ Watch history syncs every 10 minutes
+- ✅ Video thumbnails and metadata display
+- ✅ Extension popup with manual sync button
+- ✅ Complete testing guide with 15 tests
+
+**What Works Now:**
+1. Install extension on Chrome
+2. Visit YouTube - device auto-registers
+3. Watch videos - they appear in desktop app
+4. See device status (online/offline) in dashboard
+5. View watch history with thumbnails
+
+See **[PHASE2_TESTING_GUIDE.md](PHASE2_TESTING_GUIDE.md)** for complete testing instructions!
+
+---
+
+## 🚀 Quick Start - Phase 2
+
+### Step 1: Clone and Setup Desktop App
+
+```bash
+# Clone repository
+git clone https://github.com/catsontv/yt-filter.git
+cd yt-filter
+
+# Checkout Phase 2 branch
+git checkout phase-2-extension-integration
+
+# Install and run desktop app
+cd desktop-app
+npm install
+npm start
+```
+
+Desktop app will start on http://localhost:3000
+
+### Step 2: Install Chrome Extension
+
+1. Open Chrome
+2. Go to `chrome://extensions/`
+3. Enable **Developer mode** (toggle in top right)
+4. Click **Load unpacked**
+5. Select the `yt-filter/extension/` folder
+6. Extension icon should appear in toolbar
+
+### Step 3: Test It!
+
+1. Click extension icon → should show "Connected to Desktop App"
+2. Visit https://www.youtube.com
+3. Watch any video
+4. Check desktop app **Watch History** page
+5. Video should appear within 10 seconds (or click "Sync Now" in extension)
+
+**See full testing guide:** [PHASE2_TESTING_GUIDE.md](PHASE2_TESTING_GUIDE.md)
+
+---
+
+## 🏛️ Architecture
 
 ```
 ┌─────────────────────────────────┐
@@ -45,212 +88,287 @@ YouTube Monitor is a comprehensive system for parents who want to:
 │  • Electron + React UI          │
 │  • SQLite Database              │
 │  • Express REST API             │
-│  • Cloudflare Tunnel (optional) │
+│  • Cloudflare Tunnel (Phase 6)  │
 └─────────────────────────────────┘
            ⇕️ REST API
 ┌─────────────────────────────────┐
-│  Chrome Extension               │
+│  Chrome Extension ✅            │
 │  Installed on Kid's Device      │
 │                                 │
 │  • Tracks watch history         │
-│  • Enforces blocks              │
+│  • Enforces blocks (Phase 3+)   │
 │  • Reports to desktop app       │
+│  • Heartbeat monitoring         │
 └─────────────────────────────────┘
 ```
 
-## ✨ Key Features
+---
 
-### For Parents (Desktop App)
-- 📊 **Dashboard** - See all YouTube activity at a glance
-- 🎬 **Watch History** - Full details with thumbnails, titles, channels
-- 🚫 **Smart Blocking**
-  - Block specific videos or entire channels
-  - Keyword blocking (e.g., "fortnite")
-  - Time-based rules (e.g., no YouTube during school hours)
-  - Daily time limits (e.g., max 2 hours/day)
-- 📱 **Multi-Device** - Manage multiple kids' devices
-- 🌍 **Remote Access** - Works even when kids are away from home
-- 🔔 **Alerts** - Get notified when extension is disabled or blocks are attempted
-- 🎨 **Clean UI** - Light/dark mode, simple and intuitive
+## ✨ Features Status
 
-### For Kids (Chrome Extension)
-- Transparent monitoring (they know they're being tracked)
-- Clear block messages explaining why content is restricted
-- Can't seek/skip in videos (disabled timeline/progress bar)
-- Protected with parent password
+### Phase 1: Core Desktop App ✅ COMPLETE
+- ✅ Electron app with React UI
+- ✅ SQLite database
+- ✅ REST API server (localhost:3000)
+- ✅ 5-page UI (Dashboard, Watch History, Blocks, Devices, Settings)
+- ✅ Light/dark theme toggle
+- ✅ System tray integration
+- ✅ Auto-refresh every 5 seconds
 
-## 🚀 Quick Start (Phase 1 Testing)
+### Phase 2: Extension Integration ✅ COMPLETE
+- ✅ Chrome extension (Manifest V3)
+- ✅ Auto-registration on first YouTube visit
+- ✅ Watch history tracking
+- ✅ Video metadata extraction (title, channel, thumbnail)
+- ✅ Automatic sync every 10 minutes
+- ✅ Manual sync button
+- ✅ Heartbeat monitoring (every 60 seconds)
+- ✅ Online/offline device detection
+- ✅ Extension popup UI
+- ✅ Local buffering (up to 100 videos)
 
-### Prerequisites
-- Windows 10/11
-- Node.js 18+ installed
-- Git
+### Phase 3: Basic Blocking 🕒 NEXT
+- ⚪ Block videos and channels
+- ⚪ Block overlay in extension
+- ⚪ Custom block messages
+- ⚪ Block attempt tracking
 
-### Installation
+### Phase 4: Advanced Blocking 🕒 PLANNED
+- ⚪ Keyword blocking
+- ⚪ Time-based rules
+- ⚪ Daily time limits
 
-```bash
-# Clone the repository
-git clone https://github.com/catsontv/yt-filter.git
-cd yt-filter
+### Phase 5: Security & Protection 🕒 PLANNED
+- ⚪ Password protection
+- ⚪ Incognito detection
+- ⚪ Tamper alerts
+- ⚪ Notification system
 
-# Checkout Phase 1 branch
-git checkout phase-1-core-desktop-app
+### Phase 6: Remote Access 🕒 PLANNED
+- ⚪ Cloudflare Tunnel integration
+- ⚪ Remote monitoring
 
-# Install and run
-cd desktop-app
-npm install
-npm start
-```
+### Phase 7: Polish & Release 🕒 PLANNED
+- ⚪ Professional UI
+- ⚪ Installer with auto-updater
+- ⚪ Complete documentation
 
-### Testing
-
-Once the app is running, open a new PowerShell window:
-
-```powershell
-cd desktop-app
-.\test-api.ps1
-```
-
-**You should see:**
-- Dashboard updates within 5 seconds
-- 1 device registered
-- 3 sample videos with thumbnails
-- All data persists after restart
-
-### Need Help?
-
-See the comprehensive guides:
-- [QUICK_START_AFTER_FIX.md](desktop-app/QUICK_START_AFTER_FIX.md) - Step-by-step testing
-- [PHASE1_TESTING_GUIDE.md](PHASE1_TESTING_GUIDE.md) - Complete testing checklist
+---
 
 ## 📁 Project Structure
 
 ```
 yt-filter/
-├── desktop-app/          # Electron desktop application
+├── desktop-app/          # Electron desktop application ✅
 │   ├── src/
 │   │   ├── main/        # Electron main process
 │   │   ├── api/         # REST API server
 │   │   ├── database/    # SQLite operations
 │   │   └── renderer/    # React UI
-│   ├── resources/       # Icons, binaries
-│   ├── FIX_SUMMARY.md   # What was fixed
-│   ├── CRITICAL_FIX_APPLIED.md  # Technical details
-│   └── QUICK_START_AFTER_FIX.md # Testing guide
+│   └── package.json
 │
-├── extension/           # Chrome extension (Phase 2)
+├── extension/            # Chrome extension ✅ NEW
 │   ├── manifest.json
-│   ├── content.js
-│   ├── background.js
-│   └── config.js
+│   ├── background.js     # Service worker
+│   ├── content.js        # YouTube page detection
+│   ├── popup.html        # Extension popup
+│   ├── popup.js
+│   ├── config.js
+│   └── README.md         # Extension docs
 │
 ├── docs/                # Documentation
-├── DEVELOPMENT_PLAN.md  # Phased development roadmap
-├── PHASE1_TESTING_GUIDE.md  # Complete test suite
-└── README.md           # This file
+├── DEVELOPMENT_PLAN.md  # Phased roadmap
+├── PHASE1_TESTING_GUIDE.md
+├── PHASE2_TESTING_GUIDE.md  ✅ NEW
+├── PHASE2_README.md     ✅ NEW
+└── README.md            # This file
 ```
 
-## 🛠️ Development Status
+---
 
-**Current Phase:** Phase 1 - Core Desktop App (✅ COMPLETE & TESTED)
+## 🧪 Testing
 
-### Phase 1 Deliverables (✓ All Working)
-- ✅ Electron app with React UI
-- ✅ SQLite database with all tables
-- ✅ REST API server (localhost:3000)
-- ✅ 5-page UI (Dashboard, Watch History, Blocks, Devices, Settings)
-- ✅ Device registration
-- ✅ Watch history tracking
-- ✅ Data persistence
-- ✅ Auto-refresh (5 second interval)
-- ✅ Light/dark theme toggle
-- ✅ System tray integration
+### Phase 2 Complete Test Suite
 
-**Next Phase:** Phase 2 - Chrome Extension Development
+See **[PHASE2_TESTING_GUIDE.md](PHASE2_TESTING_GUIDE.md)** for:
+- 15 detailed test cases
+- Performance tests
+- Edge case scenarios  
+- Troubleshooting guide
+- Expected pass/fail criteria
 
-See [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) for complete roadmap.
+### Quick Verification (2 minutes)
 
-## 🎯 Design Goals
+```bash
+# 1. Start desktop app
+cd desktop-app
+npm start
 
-1. **Simple for non-technical parents** - Download, install, done
-2. **Transparent monitoring** - Kids know they're being tracked
-3. **Robust but not invasive** - Monitor usage without spying
-4. **Works remotely** - Not limited to home network
-5. **Easy to test** - Each phase has testable features
+# 2. Install extension in Chrome
+# (see Quick Start above)
+
+# 3. Visit YouTube and watch a video
+
+# 4. Check desktop app Watch History page
+# Should see video with thumbnail within 10 seconds
+```
+
+---
 
 ## 🔒 Privacy & Security
 
-- All data stored locally on parent's computer (SQLite)
-- Optional remote access via encrypted Cloudflare tunnel
-- No third-party data sharing
-- Open source - you can audit the code
-- Enterprise-grade security:
-  - Helmet security headers
-  - Rate limiting
-  - Input validation
-  - API key authentication
-  - CORS restrictions
+### What We Track
+- Video ID, title, channel name
+- Video thumbnail URL
+- Timestamp when video page was accessed
+- Device info (browser, OS)
 
-## 📝 Technical Details
+### What We DON'T Track
+- How long you watched (watch duration)
+- Search queries
+- Comments or likes  
+- Private browsing (incognito)
+- Anything outside YouTube
+
+### Data Storage
+- All data stored locally on parent's computer (SQLite)
+- Optional remote access via encrypted Cloudflare tunnel (Phase 6)
+- **No third-party data sharing**
+- **No cloud storage**
+- Open source - you can audit the code
+
+---
+
+## 🛠️ Technical Details
 
 **Desktop App:**
-- Electron 33.4+ (latest stable)
+- Electron 33.4+
 - React (UI components)
-- SQLite via sql.js (database)
+- SQLite via sql.js
 - Express 4.19+ (REST API)
 - bcryptjs (password hashing)
 - Helmet + express-rate-limit (security)
 
 **Chrome Extension:**
 - Manifest V3
-- Tracks YouTube activity
-- Enforces blocks client-side
-- Password-protected
+- Service Worker (background)
+- Content Script (YouTube detection)
+- Chrome Storage API
+- Chrome Alarms API
+
+**API Endpoints (Phase 1+2):**
+- `POST /api/v1/register` - Register device
+- `POST /api/v1/watch-history` - Submit watch history
+- `GET /api/v1/heartbeat/:device_id` - Heartbeat ping
+- `GET /api/v1/blocks/:device_id` - Get blocks (Phase 3)
+
+---
+
+## 📝 Development Status
+
+**Current Phase:** Phase 2 - Extension Integration ✅ COMPLETE
+
+**Commits:**
+- [Extension core files](https://github.com/catsontv/yt-filter/commit/e945a12d18d60e40486a3a4f8a2d58c83f7b513f)
+- [Testing guide and docs](https://github.com/catsontv/yt-filter/commit/d7174a1ca742c3ed0249abd464d4d7c84a90983c)
+
+**Next Phase:** Phase 3 - Basic Blocking (2-3 days)
+
+See [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) for complete roadmap.
+
+---
+
+## ⚠️ Known Limitations (Phase 2)
+
+### Extension
+- ❌ No content blocking yet (Phase 3)
+- ❌ No keyword filtering (Phase 4)  
+- ❌ No time restrictions (Phase 4)
+- ❌ No password protection (Phase 5)
+- ❌ No incognito detection (Phase 5)
+- ❌ Icons need to be generated (see extension/icons/ICONS_INFO.md)
+
+### Desktop App
+- ❌ No block management UI (Phase 3)
+- ❌ No time rules UI (Phase 4)
+- ❌ No alert system (Phase 5)
+- ❌ No remote access (Phase 6)
+
+---
+
+## 🐛 Troubleshooting
+
+### Extension won't load
+- Check Chrome version (needs 88+)
+- Enable Developer Mode in chrome://extensions/
+- Verify all files are in extension folder
+- Look for errors in chrome://extensions/
+
+### Device not appearing in desktop app  
+- Ensure desktop app is running (http://localhost:3000)
+- Visit YouTube explicitly (not just install extension)
+- Check service worker console for errors
+- Try reloading extension
+
+### Videos not syncing
+- Check extension popup for buffer count
+- Try manual "Sync Now" button
+- Verify desktop app is accessible
+- Check service worker console for errors
+- Ensure desktop app auto-refresh is working (every 5s)
+
+### Device shows offline
+- Check if extension is enabled  
+- Verify heartbeat in service worker console
+- Ensure desktop app is running
+- Wait 60 seconds for next heartbeat
+
+See [PHASE2_TESTING_GUIDE.md](PHASE2_TESTING_GUIDE.md) for more troubleshooting.
+
+---
 
 ## 🤝 Contributing
 
 This is a personal project, but suggestions and bug reports are welcome via [Issues](https://github.com/catsontv/yt-filter/issues).
 
-## 📝 Testing
-
-Comprehensive testing guides available:
-
-1. **[QUICK_START_AFTER_FIX.md](desktop-app/QUICK_START_AFTER_FIX.md)** - 3-command quick start
-2. **[PHASE1_TESTING_GUIDE.md](PHASE1_TESTING_GUIDE.md)** - Complete 13-test checklist
-3. **[CRITICAL_FIX_APPLIED.md](desktop-app/CRITICAL_FIX_APPLIED.md)** - Troubleshooting guide
-
-All tests now pass with the database synchronization fix!
-
-## 💻 Recent Changes
-
-### December 3, 2025 - Critical Fix
-- ✅ Fixed database synchronization issue
-- ✅ API writes now immediately visible in UI
-- ✅ Eliminated race conditions
-- ✅ Added comprehensive documentation
-- ✅ All Phase 1 tests passing
-
-**Commits:**
-- [94bf8cd](https://github.com/catsontv/yt-filter/commit/94bf8cd32b82755cda6b6731c200da8754a28c45) - Executive summary
-- [7e847fd](https://github.com/catsontv/yt-filter/commit/7e847fd36bde71d3621a262c8d5fd1b5c3ca09b0) - Quick start guide
-- [5639c92](https://github.com/catsontv/yt-filter/commit/5639c92652ee0477840d40d6ac20c06e1cc9e5e4) - Technical docs
-- [9f5a628](https://github.com/catsontv/yt-filter/commit/9f5a6286e4f07a1d0f121025ad7c4da341723cf1) - Database overhaul
+---
 
 ## 📝 License
 
 MIT License - See [LICENSE](LICENSE) for details.
 
+---
+
 ## 🔗 Links
 
-- [Development Plan](DEVELOPMENT_PLAN.md) - Phased roadmap
-- [Phase 1 Testing Guide](PHASE1_TESTING_GUIDE.md) - Complete test suite
-- [Quick Start After Fix](desktop-app/QUICK_START_AFTER_FIX.md) - Get started now
-- [Issues](https://github.com/catsontv/yt-filter/issues) - Bug reports & feature requests
-- [Releases](https://github.com/catsontv/yt-filter/releases) - Download installers
+- [Development Plan](DEVELOPMENT_PLAN.md) - Complete 7-phase roadmap
+- [Phase 1 Testing](PHASE1_TESTING_GUIDE.md) - Desktop app tests
+- [Phase 2 Testing](PHASE2_TESTING_GUIDE.md) - Extension tests ✅ NEW
+- [Phase 2 README](PHASE2_README.md) - Phase 2 summary ✅ NEW
+- [Extension README](extension/README.md) - Extension docs ✅ NEW
+- [Issues](https://github.com/catsontv/yt-filter/issues) - Bug reports
+- [Releases](https://github.com/catsontv/yt-filter/releases) - Downloads
 
 ---
 
-**Status:** ✅ Phase 1 Complete & Working  
-**Branch:** [phase-1-core-desktop-app](https://github.com/catsontv/yt-filter/tree/phase-1-core-desktop-app)  
-**Platform:** Windows (Phase 1), Android (Phase 2+)  
-**Last Updated:** December 3, 2025
+**Current Status:** ✅ Phase 2 Complete - Extension Integration Working  
+**Branch:** [phase-2-extension-integration](https://github.com/catsontv/yt-filter/tree/phase-2-extension-integration)  
+**Platform:** Windows Desktop + Chrome Extension  
+**Last Updated:** December 4, 2025
+
+---
+
+### 🎉 What's Working Right Now
+
+1. ✅ Desktop app shows devices online/offline
+2. ✅ Extension tracks every YouTube video watched
+3. ✅ Watch history displays with thumbnails
+4. ✅ Heartbeat monitoring updates every 60 seconds
+5. ✅ Auto-sync every 10 minutes
+6. ✅ Manual sync button in extension
+7. ✅ All data persists in SQLite
+8. ✅ Multi-device support
+9. ✅ Real-time dashboard updates
+10. ✅ Clean, professional UI with dark mode
+
+**Ready to test? Follow the Quick Start guide above!**
