@@ -12,11 +12,16 @@ function getApiEndpoint(path) {
   return `${CONFIG.API_URL}/api/${CONFIG.API_VERSION}${path}`;
 }
 
-// Device ID - generated once and stored
-let deviceId = null;
-let deviceName = null;
-let apiKey = null;
-let isRegistered = false;
+// Helper to get credentials from storage (Service Workers lose in-memory state)
+async function getCredentials() {
+  const stored = await chrome.storage.local.get(['deviceId', 'deviceName', 'apiKey', 'isRegistered']);
+  return {
+    deviceId: stored.deviceId || null,
+    deviceName: stored.deviceName || null,
+    apiKey: stored.apiKey || null,
+    isRegistered: stored.isRegistered || false
+  };
+}
 
 // Initialize extension
 chrome.runtime.onInstalled.addListener(async () => {
@@ -34,25 +39,22 @@ chrome.runtime.onStartup.addListener(async () => {
 
 // Generate or retrieve device ID
 async function initializeDevice() {
-  const stored = await chrome.storage.local.get(['deviceId', 'deviceName', 'apiKey', 'isRegistered']);
+  const creds = await getCredentials();
   
-  if (stored.deviceId) {
-    deviceId = stored.deviceId;
-    deviceName = stored.deviceName;
-    apiKey = stored.apiKey;
-    isRegistered = stored.isRegistered || false;
-    console.log('Device ID loaded:', deviceId);
-    console.log('API Key loaded:', apiKey ? '✓' : '✗');
+  if (creds.deviceId) {
+    console.log('Device ID loaded:', creds.deviceId);
+    console.log('API Key loaded:', creds.apiKey ? '✓' : '✗');
+    console.log('Registered:', creds.isRegistered);
   } else {
     // Generate new UUID
-    deviceId = generateUUID();
-    deviceName = await generateDeviceName();
+    const deviceId = generateUUID();
+    const deviceName = await generateDeviceName();
     await chrome.storage.local.set({ deviceId, deviceName, isRegistered: false });
     console.log('New Device ID created:', deviceId);
   }
   
   // Try to register if not already registered
-  if (!isRegistered) {
+  if (!creds.isRegistered) {
     await registerDevice();
   }
 }
@@ -82,7 +84,8 @@ async function generateDeviceName() {
 
 // Register device with desktop app
 async function registerDevice() {
-  if (!deviceId) return;
+  const creds = await getCredentials();
+  if (!creds.deviceId) return;
   
   try {
     const response = await fetch(getApiEndpoint('/register'), {
@@ -91,8 +94,8 @@ async function registerDevice() {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        device_id: deviceId,
-        device_name: deviceName,
+        device_id: creds.deviceId,
+        device_name: creds.deviceName,
       })
     });
     
@@ -101,10 +104,8 @@ async function registerDevice() {
       console.log('Device registered successfully:', data);
       
       // Store API key and registration status
-      apiKey = data.api_key;
-      isRegistered = true;
       await chrome.storage.local.set({ 
-        apiKey: apiKey,
+        apiKey: data.api_key,
         isRegistered: true 
       });
       
@@ -142,16 +143,22 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 
 // Send heartbeat to desktop app
 async function sendHeartbeat() {
-  if (!deviceId || !isRegistered || !apiKey) {
-    console.log('Heartbeat skipped: missing credentials');
+  const creds = await getCredentials();
+  
+  if (!creds.deviceId || !creds.isRegistered || !creds.apiKey) {
+    console.log('Heartbeat skipped: missing credentials', {
+      hasDeviceId: !!creds.deviceId,
+      isRegistered: creds.isRegistered,
+      hasApiKey: !!creds.apiKey
+    });
     return;
   }
   
   try {
-    const response = await fetch(getApiEndpoint(`/heartbeat/${deviceId}`), {
+    const response = await fetch(getApiEndpoint(`/heartbeat/${creds.deviceId}`), {
       method: 'GET',
       headers: {
-        'X-API-Key': apiKey,
+        'X-API-Key': creds.apiKey,
       },
     });
     
@@ -163,7 +170,6 @@ async function sendHeartbeat() {
       // If 401, try re-registering
       if (response.status === 401) {
         console.log('API key invalid, attempting re-registration...');
-        isRegistered = false;
         await chrome.storage.local.set({ isRegistered: false });
         await registerDevice();
       }
@@ -175,8 +181,14 @@ async function sendHeartbeat() {
 
 // Sync watch history to desktop app
 async function syncWatchHistory() {
-  if (!deviceId || !isRegistered || !apiKey) {
-    console.log('Sync skipped: missing credentials');
+  const creds = await getCredentials();
+  
+  if (!creds.deviceId || !creds.isRegistered || !creds.apiKey) {
+    console.log('Sync skipped: missing credentials', {
+      hasDeviceId: !!creds.deviceId,
+      isRegistered: creds.isRegistered,
+      hasApiKey: !!creds.apiKey
+    });
     return;
   }
   
@@ -204,12 +216,14 @@ async function syncWatchHistory() {
       duration: video.duration
     }));
     
+    console.log('Sending videos:', videos);
+    
     // Send batch to desktop app
     const response = await fetch(getApiEndpoint('/watch-history'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-API-Key': apiKey,
+        'X-API-Key': creds.apiKey,
       },
       body: JSON.stringify({
         videos: videos
@@ -217,16 +231,19 @@ async function syncWatchHistory() {
     });
     
     if (response.ok) {
+      const result = await response.json();
+      console.log('Sync response:', result);
+      
       // Clear synced history
       await chrome.storage.local.set({ watchHistory: [] });
       console.log('Watch history synced successfully');
     } else {
-      console.error('Failed to sync watch history:', response.status);
+      const errorText = await response.text();
+      console.error('Failed to sync watch history:', response.status, errorText);
       
       // If 401, try re-registering
       if (response.status === 401) {
         console.log('API key invalid, attempting re-registration...');
-        isRegistered = false;
         await chrome.storage.local.set({ isRegistered: false });
         await registerDevice();
       }
@@ -241,7 +258,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'VIDEO_DETECTED') {
     handleVideoDetected(message.data);
   } else if (message.type === 'GET_DEVICE_ID') {
-    sendResponse({ deviceId, deviceName, isRegistered });
+    getCredentials().then(creds => {
+      sendResponse({ 
+        deviceId: creds.deviceId, 
+        deviceName: creds.deviceName, 
+        isRegistered: creds.isRegistered 
+      });
+    });
+    return true;
   } else if (message.type === 'MANUAL_SYNC') {
     syncWatchHistory().then(() => {
       sendResponse({ success: true });
