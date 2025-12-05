@@ -15,6 +15,7 @@ function getApiEndpoint(path) {
 // Device ID - generated once and stored
 let deviceId = null;
 let deviceName = null;
+let apiKey = null;
 let isRegistered = false;
 
 // Initialize extension
@@ -33,13 +34,15 @@ chrome.runtime.onStartup.addListener(async () => {
 
 // Generate or retrieve device ID
 async function initializeDevice() {
-  const stored = await chrome.storage.local.get(['deviceId', 'deviceName', 'isRegistered']);
+  const stored = await chrome.storage.local.get(['deviceId', 'deviceName', 'apiKey', 'isRegistered']);
   
   if (stored.deviceId) {
     deviceId = stored.deviceId;
     deviceName = stored.deviceName;
+    apiKey = stored.apiKey;
     isRegistered = stored.isRegistered || false;
     console.log('Device ID loaded:', deviceId);
+    console.log('API Key loaded:', apiKey ? '✓' : '✗');
   } else {
     // Generate new UUID
     deviceId = generateUUID();
@@ -96,8 +99,16 @@ async function registerDevice() {
     if (response.ok) {
       const data = await response.json();
       console.log('Device registered successfully:', data);
+      
+      // Store API key and registration status
+      apiKey = data.api_key;
       isRegistered = true;
-      await chrome.storage.local.set({ isRegistered: true });
+      await chrome.storage.local.set({ 
+        apiKey: apiKey,
+        isRegistered: true 
+      });
+      
+      console.log('API key stored successfully');
       
       // Start heartbeat immediately after registration
       sendHeartbeat();
@@ -131,17 +142,31 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 
 // Send heartbeat to desktop app
 async function sendHeartbeat() {
-  if (!deviceId || !isRegistered) return;
+  if (!deviceId || !isRegistered || !apiKey) {
+    console.log('Heartbeat skipped: missing credentials');
+    return;
+  }
   
   try {
     const response = await fetch(getApiEndpoint(`/heartbeat/${deviceId}`), {
       method: 'GET',
+      headers: {
+        'X-API-Key': apiKey,
+      },
     });
     
     if (response.ok) {
       console.log('Heartbeat sent successfully');
     } else {
       console.error('Heartbeat failed:', response.status);
+      
+      // If 401, try re-registering
+      if (response.status === 401) {
+        console.log('API key invalid, attempting re-registration...');
+        isRegistered = false;
+        await chrome.storage.local.set({ isRegistered: false });
+        await registerDevice();
+      }
     }
   } catch (error) {
     console.error('Heartbeat error:', error);
@@ -150,7 +175,10 @@ async function sendHeartbeat() {
 
 // Sync watch history to desktop app
 async function syncWatchHistory() {
-  if (!deviceId || !isRegistered) return;
+  if (!deviceId || !isRegistered || !apiKey) {
+    console.log('Sync skipped: missing credentials');
+    return;
+  }
   
   try {
     // Get unsynced history from storage
@@ -164,34 +192,45 @@ async function syncWatchHistory() {
     
     console.log(`Syncing ${watchHistory.length} videos to desktop app...`);
     
-    // Send each video to desktop app
-    for (const video of watchHistory) {
-      const response = await fetch(getApiEndpoint('/watch-history'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          device_id: deviceId,
-          video_id: video.videoId,
-          video_title: video.title,
-          channel_name: video.channelName,
-          channel_url: video.channelUrl,
-          video_url: video.videoUrl,
-          thumbnail_url: video.thumbnailUrl,
-          watched_at: video.watchedAt,
-        })
-      });
+    // Prepare videos array for batch submission
+    const videos = watchHistory.map(video => ({
+      video_id: video.videoId,
+      title: video.title,
+      channel_name: video.channelName,
+      channel_id: video.channelId,
+      thumbnail_url: video.thumbnailUrl,
+      video_url: video.videoUrl,
+      watched_at: video.watchedAt,
+      duration: video.duration
+    }));
+    
+    // Send batch to desktop app
+    const response = await fetch(getApiEndpoint('/watch-history'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': apiKey,
+      },
+      body: JSON.stringify({
+        videos: videos
+      })
+    });
+    
+    if (response.ok) {
+      // Clear synced history
+      await chrome.storage.local.set({ watchHistory: [] });
+      console.log('Watch history synced successfully');
+    } else {
+      console.error('Failed to sync watch history:', response.status);
       
-      if (!response.ok) {
-        console.error('Failed to sync video:', video.videoId);
+      // If 401, try re-registering
+      if (response.status === 401) {
+        console.log('API key invalid, attempting re-registration...');
+        isRegistered = false;
+        await chrome.storage.local.set({ isRegistered: false });
+        await registerDevice();
       }
     }
-    
-    // Clear synced history
-    await chrome.storage.local.set({ watchHistory: [] });
-    console.log('Watch history synced successfully');
-    
   } catch (error) {
     console.error('Sync error:', error);
   }
@@ -221,7 +260,7 @@ async function handleVideoDetected(videoData) {
   let watchHistory = stored.watchHistory || [];
   
   // Add timestamp
-  videoData.watchedAt = new Date().toISOString();
+  videoData.watchedAt = Date.now();
   
   // Add to buffer
   watchHistory.push(videoData);
