@@ -116,6 +116,12 @@ async function loadPage(page) {
     }
     
     content.innerHTML = html;
+    
+    // Setup click handlers for external links
+    if (page === 'watch-history') {
+      setupExternalLinks();
+    }
+    
     console.log('Page loaded:', page);
   } catch (error) {
     console.error('Error loading page:', error);
@@ -132,6 +138,20 @@ async function loadPage(page) {
       `;
     }
   }
+}
+
+// Setup external link handlers
+function setupExternalLinks() {
+  const links = document.querySelectorAll('a[data-external]');
+  links.forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      const url = link.getAttribute('href');
+      if (url) {
+        require('electron').shell.openExternal(url);
+      }
+    });
+  });
 }
 
 // Dashboard page
@@ -204,17 +224,20 @@ async function getDashboardPage() {
               </tr>
             </thead>
             <tbody>
-              ${devices.map(device => `
-                <tr>
-                  <td>${device.name}</td>
-                  <td>
-                    <span class="status-badge ${device.is_online ? 'status-online' : 'status-offline'}">
-                      ${device.is_online ? '● Online' : '○ Offline'}
-                    </span>
-                  </td>
-                  <td>${device.last_heartbeat ? new Date(device.last_heartbeat).toLocaleString() : 'Never'}</td>
-                </tr>
-              `).join('')}
+              ${devices.map(device => {
+                const isOnline = device.is_online && device.last_heartbeat && (Date.now() - device.last_heartbeat) < 120000; // 2 minutes
+                return `
+                  <tr>
+                    <td>${device.name}</td>
+                    <td>
+                      <span class="status-badge ${isOnline ? 'status-online' : 'status-offline'}">
+                        ${isOnline ? '● Online' : '○ Offline'}
+                      </span>
+                    </td>
+                    <td>${device.last_heartbeat ? new Date(device.last_heartbeat).toLocaleString() : 'Never'}</td>
+                  </tr>
+                `;
+              }).join('')}
             </tbody>
           </table>
         </div>
@@ -233,21 +256,21 @@ async function getWatchHistoryPage() {
     FROM watch_history wh
     LEFT JOIN devices d ON wh.device_id = d.id
     ORDER BY wh.watched_at DESC
-    LIMIT 50
+    LIMIT 100
   `);
 
   return `
     <div class="page">
       <div class="page-header">
         <h1>Watch History</h1>
-        <p>Videos watched across all devices <span style="font-size: 12px; color: var(--text-secondary);">(Auto-refreshes every 5s)</span></p>
+        <p>Videos watched across all devices <span style="font-size: 12px; color: var(--text-secondary);">(Auto-refreshes every 5s, minimum 15 seconds watch time)</span></p>
       </div>
       
       ${history.length === 0 ? `
         <div class="empty-state">
           <div class="empty-state-icon">🎬</div>
           <h3>No watch history yet</h3>
-          <p>Run the test script to add sample videos</p>
+          <p>Videos will appear here after being watched for 15+ seconds</p>
         </div>
       ` : `
         <div class="card">
@@ -265,10 +288,12 @@ async function getWatchHistoryPage() {
                 <tr>
                   <td>
                     <div style="display: flex; align-items: center; gap: 10px;">
-                      ${item.thumbnail_url ? `<img src="${item.thumbnail_url}" style="width: 80px; height: 45px; object-fit: cover; border-radius: 4px;">` : ''}
-                      <div>
-                        <strong>${item.title || 'Unknown Title'}</strong>
-                        ${item.video_url ? `<br><a href="${item.video_url}" target="_blank" style="color: var(--accent-color); font-size: 12px;">Watch on YouTube</a>` : ''}
+                      ${item.thumbnail_url ? `<img src="${item.thumbnail_url}" style="width: 120px; height: 67px; object-fit: cover; border-radius: 4px; flex-shrink: 0;" onerror="this.style.display='none'">` : ''}
+                      <div style="min-width: 0;">
+                        <strong style="display: block; margin-bottom: 4px;">${item.title || 'Unknown Title'}</strong>
+                        ${item.video_url ? `<a href="${item.video_url}" data-external style="color: var(--accent-color); font-size: 12px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; cursor: pointer;">
+                          <span>🔗 Watch on YouTube</span>
+                        </a>` : ''}
                       </div>
                     </div>
                   </td>
@@ -367,19 +392,22 @@ async function getDevicesPage() {
               </tr>
             </thead>
             <tbody>
-              ${devices.map(device => `
-                <tr>
-                  <td><strong>${device.name}</strong></td>
-                  <td><code style="font-size: 11px;">${device.id}</code></td>
-                  <td>
-                    <span class="status-badge ${device.is_online ? 'status-online' : 'status-offline'}">
-                      ${device.is_online ? '● Online' : '○ Offline'}
-                    </span>
-                  </td>
-                  <td>${device.last_heartbeat ? new Date(device.last_heartbeat).toLocaleString() : 'Never'}</td>
-                  <td>${new Date(device.created_at).toLocaleDateString()}</td>
-                </tr>
-              `).join('')}
+              ${devices.map(device => {
+                const isOnline = device.is_online && device.last_heartbeat && (Date.now() - device.last_heartbeat) < 120000; // 2 minutes
+                return `
+                  <tr>
+                    <td><strong>${device.name}</strong></td>
+                    <td><code style="font-size: 11px;">${device.id}</code></td>
+                    <td>
+                      <span class="status-badge ${isOnline ? 'status-online' : 'status-offline'}">
+                        ${isOnline ? '● Online' : '○ Offline'}
+                      </span>
+                    </td>
+                    <td>${device.last_heartbeat ? new Date(device.last_heartbeat).toLocaleString() : 'Never'}</td>
+                    <td>${new Date(device.created_at).toLocaleDateString()}</td>
+                  </tr>
+                `;
+              }).join('')}
             </tbody>
           </table>
         </div>
@@ -431,8 +459,8 @@ function getSettingsPage() {
 
       <div class="card">
         <h3>About</h3>
-        <p><strong>Version:</strong> 1.0.0</p>
-        <p style="margin-top: 10px;"><strong>Status:</strong> Phase 1 - Core Desktop App</p>
+        <p><strong>Version:</strong> 1.0.0 - Phase 2</p>
+        <p style="margin-top: 10px;"><strong>Status:</strong> Extension Integration Complete</p>
         <p style="margin-top: 10px; color: var(--text-secondary); font-size: 13px;">YouTube Monitor - Desktop Application for Parents</p>
       </div>
     </div>
