@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YouTube Monitor</title>
+  <style>
+    body {
+      width: 300px;
+      padding: 15px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+      font-size: 14px;
+      margin: 0;
+    }
+    
+    h1 {
+      font-size: 18px;
+      margin: 0 0 15px 0;
+      color: #1a1a1a;
+    }
+    
+    .status {
+      padding: 10px;
+      border-radius: 5px;
+      margin-bottom: 15px;
+    }
+    
+    .status.connected {
+      background: #e8f5e9;
+      border: 1px solid #4caf50;
+      color: #2e7d32;
+    }
+    
+    .status.disconnected {
+      background: #ffebee;
+      border: 1px solid #f44336;
+      color: #c62828;
+    }
+    
+    .info {
+      margin-bottom: 10px;
+    }
+    
+    .label {
+      font-weight: 600;
+      color: #555;
+    }
+    
+    .value {
+      color: #333;
+    }
+    
+    button {
+      width: 100%;
+      padding: 10px;
+      background: #1976d2;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+    
+    button:hover {
+      background: #1565c0;
+    }
+    
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    
+    .footer {
+      margin-top: 15px;
+      padding-top: 15px;
+      border-top: 1px solid #e0e0e0;
+      font-size: 12px;
+      color: #666;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <h1>📺 YouTube Monitor</h1>
+  
+  <div id="status" class="status disconnected">
+    <div>⏳ Connecting...</div>
+  </div>
+  
+  <div class="info">
+    <div class="label">Device Name:</div>
+    <div id="deviceName" class="value">Loading...</div>
+  </div>
+  
+  <div class="info">
+    <div class="label">Device ID:</div>
+    <div id="deviceId" class="value" style="font-size: 11px; word-break: break-all;">Loading...</div>
+  </div>
+  
+  <div class="info">
+    <div class="label">Buffered Videos:</div>
+    <div id="bufferCount" class="value">0</div>
+  </div>
+  
+  <button id="syncBtn">Sync Now</button>
+  
+  <div class="footer">
+    Your YouTube activity is being monitored<br>
+    Phase 2 - Extension Integration
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>
