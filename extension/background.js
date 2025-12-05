@@ -1,5 +1,16 @@
-// Import config
-importScripts('config.js');
+// Configuration (inlined to avoid import issues)
+const CONFIG = {
+  API_URL: 'http://localhost:3000',
+  API_VERSION: 'v1',
+  SYNC_INTERVAL: 10 * 60 * 1000, // 10 minutes
+  HEARTBEAT_INTERVAL: 60 * 1000, // 60 seconds
+  MAX_HISTORY_BUFFER: 100, // Max videos to buffer before forcing sync
+};
+
+// Helper to get full API endpoint
+function getApiEndpoint(path) {
+  return `${CONFIG.API_URL}/api/${CONFIG.API_VERSION}${path}`;
+}
 
 // Device ID - generated once and stored
 let deviceId = null;
@@ -192,6 +203,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     handleVideoDetected(message.data);
   } else if (message.type === 'GET_DEVICE_ID') {
     sendResponse({ deviceId, deviceName, isRegistered });
+  } else if (message.type === 'MANUAL_SYNC') {
+    syncWatchHistory().then(() => {
+      sendResponse({ success: true });
+    });
+    return true; // Keep channel open for async response
   }
   return true;
 });
@@ -221,13 +237,3 @@ async function handleVideoDetected(videoData) {
     await syncWatchHistory();
   }
 }
-
-// Manual sync trigger (can be called from popup)
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === 'MANUAL_SYNC') {
-    syncWatchHistory().then(() => {
-      sendResponse({ success: true });
-    });
-    return true;
-  }
-});
