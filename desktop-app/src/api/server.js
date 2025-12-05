@@ -26,19 +26,24 @@ app.use(helmet({
   },
 }));
 
-// CORS configuration - only allow localhost
+// CORS configuration - allow localhost and Chrome extensions
 const corsOptions = {
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or Postman)
     if (!origin) return callback(null, true);
     
-    // Only allow localhost origins
+    // Allow localhost origins
     const allowedOrigins = [
       'http://localhost:3000',
       'http://127.0.0.1:3000',
       'http://localhost',
       'http://127.0.0.1'
     ];
+    
+    // Allow Chrome extension origins (chrome-extension://)
+    if (origin.startsWith('chrome-extension://')) {
+      return callback(null, true);
+    }
     
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
